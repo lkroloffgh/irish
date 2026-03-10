@@ -3,8 +3,8 @@ import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, ReferenceL
 import { createClient } from "@supabase/supabase-js";
 
 /* ─── SUPABASE ───────────────────────────────────────────────────── */
-const SUPABASE_URL  = "https://tqwafrzjcvurtetwsjha.supabase.co";
-const SUPABASE_ANON = "***REMOVED***";
+const SUPABASE_URL  = import.meta.env.VITE_SUPABASE_URL;
+const SUPABASE_ANON = import.meta.env.VITE_SUPABASE_ANON;
 const ADMIN_API     = "/api";
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_ANON);
