@@ -173,6 +173,7 @@ export default function App() {
       status: m.status, resolvedAs: m.resolved_as, resolvedNote: m.resolved_note,
       resolvedAt: m.resolved_at ? new Date(m.resolved_at).getTime() : null,
       createdAt: new Date(m.created_at).getTime(),
+      hiddenFrom: m.hidden_from || [],
       orders: (oData || []).filter((o) => o.market_id === m.id).map((o) => ({
         id: o.id, side: o.side, price: o.price, size: parseFloat(o.size),
         userId: o.user_id, name: o.name,
@@ -183,7 +184,11 @@ export default function App() {
         size: parseFloat(t.size), ts: t.ts,
       })),
     }));
-    setMarkets(assembled);
+    const currentUserId = session?.user?.id;
+    const visible = assembled.filter((m) =>
+      !currentUserId || m.creator === currentUserId || !(m.hiddenFrom.includes(currentUserId))
+    );
+    setMarkets(visible);
     setSettled(new Set((sdData || []).map((s) => s.id)));
     setMarketsLoading(false);
   };
@@ -211,6 +216,7 @@ export default function App() {
       id: m.id, title: m.title, description: m.description, resolution: m.resolution,
       creator_id: m.creator, creator_name: m.creatorName,
       status: "open", resolved_as: null, resolved_note: null,
+      hidden_from: m.hiddenFrom || [],
     });
     // Insert initial orders
     if (m.orders.length > 0) {
@@ -512,10 +518,12 @@ function AdminPanel({ session }) {
   const loadAdminMarkets = async () => {
     setMarketsLoading(true);
     try {
-      const res  = await fetch(`${ADMIN_API}/admin/markets`, { headers: await getAuthHeader() });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error);
-      setAdminMarkets(data.markets);
+      const { data, error } = await supabase
+        .from("markets")
+        .select("id, title, creator_name, status, hidden_from")
+        .order("created_at", { ascending: false });
+      if (error) throw error;
+      setAdminMarkets(data || []);
     } catch (e) {
       setErr(e.message);
     } finally {
@@ -621,11 +629,15 @@ function AdminPanel({ session }) {
           {adminMarkets.length === 0 && !marketsLoading && (
             <p style={{ color: C.muted, fontSize: 12, textAlign: "center", padding: "40px 0" }}>No markets yet.</p>
           )}
-          {adminMarkets.map((m) => (
-            <div key={m.id} style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 10, padding: "14px 16px", marginBottom: 10 }}>
+          {adminMarkets.map((m) => {
+            const isHiddenFromMe = (m.hidden_from || []).includes(session.user.id);
+            return (
+            <div key={m.id} style={{ background: C.surface, border: `1px solid ${isHiddenFromMe ? C.border : C.border}`, borderRadius: 10, padding: "14px 16px", marginBottom: 10, opacity: isHiddenFromMe ? 0.7 : 1 }}>
               {confirmDeleteMarket === m.id && (
                 <div style={{ background: C.noDim, border: `1px solid ${C.no}44`, borderRadius: 8, padding: "12px 14px", marginBottom: 12 }}>
-                  <p style={{ color: C.text, fontSize: 13, margin: "0 0 10px" }}>Delete <strong>{m.title}</strong>? This removes all orders, trades and history.</p>
+                  <p style={{ color: C.text, fontSize: 13, margin: "0 0 10px" }}>
+                    {isHiddenFromMe ? "Delete this hidden market? This removes all orders, trades and history." : <>Delete <strong>{m.title}</strong>? This removes all orders, trades and history.</>}
+                  </p>
                   <div style={{ display: "flex", gap: 8 }}>
                     <button onClick={() => setConfirmDeleteMarket(null)}
                       style={{ flex: 1, background: "transparent", color: C.muted, border: `1px solid ${C.border}`, borderRadius: 6, padding: "7px 0", fontSize: 12, cursor: "pointer", fontFamily: mono }}>
@@ -640,8 +652,17 @@ function AdminPanel({ session }) {
               )}
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
                 <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontWeight: 700, color: C.text, fontSize: 13, marginBottom: 3 }}>{m.title}</div>
-                  <div style={{ color: C.muted, fontSize: 11 }}>by {m.creator_name} · {m.status === "resolved" ? <span style={{ color: C.yes }}>resolved</span> : <span style={{ color: C.gold }}>open</span>}</div>
+                  {isHiddenFromMe ? (
+                    <>
+                      <div style={{ fontWeight: 700, color: C.muted, fontSize: 13, marginBottom: 3, fontStyle: "italic" }}>🙈 Hidden Market</div>
+                      <div style={{ color: C.muted, fontSize: 11 }}>details hidden from you</div>
+                    </>
+                  ) : (
+                    <>
+                      <div style={{ fontWeight: 700, color: C.text, fontSize: 13, marginBottom: 3 }}>{m.title}</div>
+                      <div style={{ color: C.muted, fontSize: 11 }}>by {m.creator_name} · {m.status === "resolved" ? <span style={{ color: C.yes }}>resolved</span> : <span style={{ color: C.gold }}>open</span>}</div>
+                    </>
+                  )}
                 </div>
                 {confirmDeleteMarket !== m.id && (
                   <button onClick={() => setConfirmDeleteMarket(m.id)}
@@ -651,7 +672,8 @@ function AdminPanel({ session }) {
                 )}
               </div>
             </div>
-          ))}
+            );
+          })}
         </div>
       )}
 
@@ -1930,6 +1952,73 @@ function DebtsView({ markets, user, settled, onSettle }) {
 }
 
 /* ─── CREATE MARKET ──────────────────────────────────────────────── */
+/* ─── HIDE USERS MODAL ───────────────────────────────────────────── */
+function HideUsersModal({ currentUserId, hiddenFrom, onChange, onClose }) {
+  const [users, setUsers] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    supabase
+      .from("profiles")
+      .select("id, display_name")
+      .neq("id", currentUserId)
+      .then(({ data }) => {
+        setUsers(data || []);
+        setLoading(false);
+      });
+  }, [currentUserId]);
+
+  const toggle = (id) => {
+    onChange(hiddenFrom.includes(id) ? hiddenFrom.filter((x) => x !== id) : [...hiddenFrom, id]);
+  };
+
+  return (
+    <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.75)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000, padding: 16 }}>
+      <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 12, width: "100%", maxWidth: 340, maxHeight: "70vh", display: "flex", flexDirection: "column" }}>
+        {/* Fixed header */}
+        <div style={{ padding: "14px 16px 10px", borderBottom: `1px solid ${C.border}` }}>
+          <h3 style={{ color: C.gold, fontFamily: mono, fontSize: 13, fontWeight: 800, margin: 0 }}>🙈 Hide from users</h3>
+          <p style={{ color: C.muted, fontSize: 10, margin: "3px 0 0" }}>Selected users won't see this market.</p>
+        </div>
+
+        {/* Scrollable list */}
+        <div style={{ overflowY: "auto", flex: 1, padding: "8px 12px" }}>
+          {loading ? (
+            <p style={{ color: C.muted, fontSize: 12, padding: "8px 0" }}>Loading users…</p>
+          ) : users.length === 0 ? (
+            <p style={{ color: C.muted, fontSize: 12, padding: "8px 0" }}>No other users found.</p>
+          ) : (
+            users.map((u) => {
+              const checked = hiddenFrom.includes(u.id);
+              return (
+                <div
+                  key={u.id}
+                  onClick={() => toggle(u.id)}
+                  style={{ display: "flex", alignItems: "center", gap: 10, padding: "7px 8px", marginBottom: 4, background: checked ? C.dim : "transparent", border: `1px solid ${checked ? C.borderBright : C.border}`, borderRadius: 7, cursor: "pointer" }}
+                >
+                  <div style={{ width: 14, height: 14, borderRadius: 3, border: `2px solid ${checked ? C.gold : C.muted}`, background: checked ? C.gold : "transparent", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                    {checked && <span style={{ color: "#000", fontSize: 9, fontWeight: 900, lineHeight: 1 }}>✓</span>}
+                  </div>
+                  <span style={{ color: C.text, fontSize: 12, fontFamily: mono }}>{u.display_name}</span>
+                </div>
+              );
+            })
+          )}
+        </div>
+
+        {/* Fixed footer */}
+        <div style={{ padding: "10px 12px", borderTop: `1px solid ${C.border}` }}>
+          <button
+            onClick={onClose}
+            style={{ width: "100%", background: C.gold, color: "#000", border: "none", borderRadius: 7, padding: "9px 0", fontWeight: 800, fontSize: 12, cursor: "pointer", fontFamily: mono }}>
+            Done
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function CreateMarket({ user, onAdd, onCancel }) {
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
@@ -1938,6 +2027,8 @@ function CreateMarket({ user, onAdd, onCancel }) {
   const [mid, setMid] = useState(50);
   const [size, setSize] = useState("5");
   const [err, setErr] = useState("");
+  const [hiddenFrom, setHiddenFrom] = useState([]);
+  const [showHideModal, setShowHideModal] = useState(false);
 
   const bid = mid - 5;   // Buy YES price
   const ask = mid + 5;   // Sell YES price
@@ -1961,6 +2052,7 @@ function CreateMarket({ user, onAdd, onCancel }) {
       title, description, resolution,
       creator: user.id, creatorName: user.name, status: "open", resolvedAs: null, resolvedNote: null,
       createdAt: now,
+      hiddenFrom,
       priceHistory: generatePriceHistory(mid, 5, now),
       orders: [
         { id: uid(), side: "buy",  price: bid,  size: parseFloat(s.toFixed(2)), userId: user.id, name: user.name },
@@ -2066,6 +2158,21 @@ function CreateMarket({ user, onAdd, onCancel }) {
           </p>
         </div>
       </div>
+
+      <button
+        onClick={() => setShowHideModal(true)}
+        style={{ width: "100%", background: "transparent", color: hiddenFrom.length > 0 ? C.gold : C.muted, border: `1px solid ${hiddenFrom.length > 0 ? C.gold : C.border}`, borderRadius: 7, padding: "10px 0", fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: mono, marginBottom: 10 }}>
+        🙈 Hide from users{hiddenFrom.length > 0 ? ` (${hiddenFrom.length} hidden)` : ""}
+      </button>
+
+      {showHideModal && (
+        <HideUsersModal
+          currentUserId={user.id}
+          hiddenFrom={hiddenFrom}
+          onChange={setHiddenFrom}
+          onClose={() => setShowHideModal(false)}
+        />
+      )}
 
       {err && <p style={{ color: C.no, fontSize: 12, marginBottom: 8 }}>{err}</p>}
       <button
