@@ -1974,39 +1974,46 @@ function HideUsersModal({ currentUserId, hiddenFrom, onChange, onClose }) {
 
   return (
     <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.75)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000, padding: 16 }}>
-      <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 12, padding: 20, width: "100%", maxWidth: 360 }}>
-        <h3 style={{ color: C.gold, fontFamily: mono, fontSize: 14, fontWeight: 800, margin: "0 0 6px" }}>🙈 Hide from users</h3>
-        <p style={{ color: C.muted, fontSize: 11, margin: "0 0 16px" }}>Selected users won't see this market in their feed.</p>
+      <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 12, width: "100%", maxWidth: 340, maxHeight: "70vh", display: "flex", flexDirection: "column" }}>
+        {/* Fixed header */}
+        <div style={{ padding: "14px 16px 10px", borderBottom: `1px solid ${C.border}` }}>
+          <h3 style={{ color: C.gold, fontFamily: mono, fontSize: 13, fontWeight: 800, margin: 0 }}>🙈 Hide from users</h3>
+          <p style={{ color: C.muted, fontSize: 10, margin: "3px 0 0" }}>Selected users won't see this market.</p>
+        </div>
 
-        {loading ? (
-          <p style={{ color: C.muted, fontSize: 12 }}>Loading users…</p>
-        ) : users.length === 0 ? (
-          <p style={{ color: C.muted, fontSize: 12 }}>No other users found.</p>
-        ) : (
-          <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 20 }}>
-            {users.map((u) => {
+        {/* Scrollable list */}
+        <div style={{ overflowY: "auto", flex: 1, padding: "8px 12px" }}>
+          {loading ? (
+            <p style={{ color: C.muted, fontSize: 12, padding: "8px 0" }}>Loading users…</p>
+          ) : users.length === 0 ? (
+            <p style={{ color: C.muted, fontSize: 12, padding: "8px 0" }}>No other users found.</p>
+          ) : (
+            users.map((u) => {
               const checked = hiddenFrom.includes(u.id);
               return (
                 <div
                   key={u.id}
                   onClick={() => toggle(u.id)}
-                  style={{ display: "flex", alignItems: "center", gap: 12, padding: "10px 12px", background: checked ? C.dim : "transparent", border: `1px solid ${checked ? C.borderBright : C.border}`, borderRadius: 8, cursor: "pointer" }}
+                  style={{ display: "flex", alignItems: "center", gap: 10, padding: "7px 8px", marginBottom: 4, background: checked ? C.dim : "transparent", border: `1px solid ${checked ? C.borderBright : C.border}`, borderRadius: 7, cursor: "pointer" }}
                 >
-                  <div style={{ width: 16, height: 16, borderRadius: 4, border: `2px solid ${checked ? C.gold : C.muted}`, background: checked ? C.gold : "transparent", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
-                    {checked && <span style={{ color: "#000", fontSize: 10, fontWeight: 900, lineHeight: 1 }}>✓</span>}
+                  <div style={{ width: 14, height: 14, borderRadius: 3, border: `2px solid ${checked ? C.gold : C.muted}`, background: checked ? C.gold : "transparent", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                    {checked && <span style={{ color: "#000", fontSize: 9, fontWeight: 900, lineHeight: 1 }}>✓</span>}
                   </div>
-                  <span style={{ color: C.text, fontSize: 13, fontFamily: mono }}>{u.display_name}</span>
+                  <span style={{ color: C.text, fontSize: 12, fontFamily: mono }}>{u.display_name}</span>
                 </div>
               );
-            })}
-          </div>
-        )}
+            })
+          )}
+        </div>
 
-        <button
-          onClick={onClose}
-          style={{ width: "100%", background: C.gold, color: "#000", border: "none", borderRadius: 7, padding: "11px 0", fontWeight: 800, fontSize: 13, cursor: "pointer", fontFamily: mono }}>
-          Done
-        </button>
+        {/* Fixed footer */}
+        <div style={{ padding: "10px 12px", borderTop: `1px solid ${C.border}` }}>
+          <button
+            onClick={onClose}
+            style={{ width: "100%", background: C.gold, color: "#000", border: "none", borderRadius: 7, padding: "9px 0", fontWeight: 800, fontSize: 12, cursor: "pointer", fontFamily: mono }}>
+            Done
+          </button>
+        </div>
       </div>
     </div>
   );
