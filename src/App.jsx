@@ -623,6 +623,12 @@ function AdminPanel({ session }) {
         ))}
       </div>
 
+      {err && (
+        <div style={{ background: C.noDim, border: `1px solid ${C.no}44`, borderRadius: 8, padding: "10px 14px", marginBottom: 16, fontSize: 12, color: C.no }}>
+          {err}
+        </div>
+      )}
+
       {adminTab === "markets" && (
         <div>
           {marketsLoading && <p style={{ color: C.muted, fontSize: 13 }}>Loading markets…</p>}
@@ -679,12 +685,6 @@ function AdminPanel({ session }) {
 
       {adminTab === "users" && (
         <>
-        {err && (
-        <div style={{ background: C.noDim, border: `1px solid ${C.no}44`, borderRadius: 8, padding: "10px 14px", marginBottom: 16, fontSize: 12, color: C.no }}>
-          {err} — is the admin server running?
-        </div>
-      )}
-
       {loading ? (
         <p style={{ color: C.muted, fontSize: 13 }}>Loading users…</p>
       ) : (
