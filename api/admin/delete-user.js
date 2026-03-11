@@ -1,14 +1,13 @@
 import { createClient } from "@supabase/supabase-js";
 
 const SUPABASE_URL = process.env.VITE_SUPABASE_URL;
-const ANON_KEY    = process.env.VITE_SUPABASE_ANON;
 const SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE;
 
 async function verifyAdmin(token) {
-  const supabase = createClient(SUPABASE_URL, ANON_KEY);
-  const { data: { user }, error } = await supabase.auth.getUser(token);
+  const admin = createClient(SUPABASE_URL, SERVICE_KEY);
+  const { data: { user }, error } = await admin.auth.getUser(token);
   if (error || !user) return null;
-  const { data: profile } = await supabase.from("profiles").select("is_superuser").eq("id", user.id).single();
+  const { data: profile } = await admin.from("profiles").select("is_superuser").eq("id", user.id).single();
   return profile?.is_superuser ? user : null;
 }
 
