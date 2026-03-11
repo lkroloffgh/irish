@@ -18,6 +18,13 @@ const parseNum = (v) => {
   return isNaN(n) ? NaN : n;
 };
 
+function urlBase64ToUint8Array(base64String) {
+  const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
+  const base64 = (base64String + padding).replace(/-/g, "+").replace(/_/g, "/");
+  const raw = atob(base64);
+  return Uint8Array.from([...raw].map((c) => c.charCodeAt(0)));
+}
+
 const DAY = 86400000;
 
 function generatePriceHistory(seed = 50, length = 20, startTs = Date.now() - length * 3600 * 1000) {
@@ -111,8 +118,11 @@ export default function App() {
   const [view, setView]         = useState("feed");
   const [selectedId, setSelectedId] = useState(null);
   const [settled, setSettled]   = useState(new Set());
-
   const [isResetFlow, setIsResetFlow] = useState(false);
+
+  const DEFAULT_NOTIF_PREFS = { new_signup: false, new_market: true, any_order: false, any_fill: false, market_activity: true, own_fill: true };
+  const [notifStatus, setNotifStatus] = useState(() => (typeof Notification !== "undefined" ? Notification.permission : "default"));
+  const [notifPrefs, setNotifPrefs] = useState(DEFAULT_NOTIF_PREFS);
 
   useEffect(() => {
     // Get initial session
@@ -129,8 +139,18 @@ export default function App() {
         return;
       }
       setSession(session);
-      if (session) fetchProfile(session.user.id);
-      else setProfile(null);
+      if (session) {
+        fetchProfile(session.user.id);
+        // Detect new signup: created_at ≈ last_sign_in_at (within 10s)
+        if (event === "SIGNED_IN" && session.user.created_at && session.user.last_sign_in_at) {
+          const diff = Math.abs(new Date(session.user.last_sign_in_at) - new Date(session.user.created_at));
+          if (diff < 10000) {
+            setTimeout(() => sendNotif("new_signup", { userName: session.user.user_metadata?.display_name || "Someone" }), 3000);
+          }
+        }
+      } else {
+        setProfile(null);
+      }
     });
 
     return () => subscription.unsubscribe();
@@ -149,6 +169,56 @@ export default function App() {
     await supabase.auth.signOut();
     setView("feed");
     setSelectedId(null);
+  };
+
+  const getAuthHeader = async () => {
+    const { data: { session: s } } = await supabase.auth.getSession();
+    return s ? { Authorization: `Bearer ${s.access_token}` } : {};
+  };
+
+  const sendNotif = async (type, payload) => {
+    try {
+      const headers = await getAuthHeader();
+      if (!headers.Authorization) return;
+      await fetch(`${ADMIN_API}/push/send`, {
+        method: "POST",
+        headers: { ...headers, "Content-Type": "application/json" },
+        body: JSON.stringify({ type, payload }),
+      });
+    } catch {}
+  };
+
+  const loadNotifPrefs = async () => {
+    try {
+      const headers = await getAuthHeader();
+      if (!headers.Authorization) return;
+      const res = await fetch(`${ADMIN_API}/push/preferences`, { headers });
+      if (!res.ok) return;
+      const data = await res.json();
+      if (data.preferences) setNotifPrefs(data.preferences);
+    } catch {}
+  };
+
+  const initNotifications = async () => {
+    if (!("serviceWorker" in navigator) || !("PushManager" in window)) return;
+    const permission = await Notification.requestPermission();
+    setNotifStatus(permission);
+    if (permission !== "granted") return;
+    const reg = await navigator.serviceWorker.register("/sw.js");
+    await navigator.serviceWorker.ready;
+    let sub = await reg.pushManager.getSubscription();
+    if (!sub) {
+      sub = await reg.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: urlBase64ToUint8Array(import.meta.env.VITE_VAPID_PUBLIC_KEY),
+      });
+    }
+    const headers = await getAuthHeader();
+    await fetch(`${ADMIN_API}/push/subscribe`, {
+      method: "POST",
+      headers: { ...headers, "Content-Type": "application/json" },
+      body: JSON.stringify({ subscription: sub.toJSON() }),
+    });
   };
 
   // ── Load all markets from Supabase ──
@@ -196,6 +266,7 @@ export default function App() {
   useEffect(() => {
     if (!session) return;
     loadMarkets();
+    loadNotifPrefs();
 
     // Real-time subscriptions — reload on any change
     const channel = supabase
@@ -232,6 +303,7 @@ export default function App() {
       })));
     }
     setView("feed");
+    sendNotif("new_market", { marketTitle: m.title, creatorName: m.creatorName, marketId: m.id });
   };
 
   const updateMarket = async (updated) => {
@@ -309,6 +381,7 @@ export default function App() {
       <Header user={user} onLogout={handleLogout}
         onHome={() => setView("feed")} onNew={() => setView("create")}
         onDebts={() => setView("debts")} onAdmin={() => setView("admin")}
+        onAlerts={() => setView("alerts")}
         activeView={view} />
       <div style={{ paddingBottom: 80 }}>
         {view === "feed" && (
@@ -321,13 +394,22 @@ export default function App() {
         )}
         {view === "detail" && currentMarket && (
           <MarketDetail market={currentMarket} user={user}
-            onUpdate={updateMarket} onBack={() => setView("feed")} />
+            onUpdate={updateMarket} onBack={() => setView("feed")} onNotify={sendNotif} />
         )}
         {view === "debts" && (
           <DebtsView markets={markets} user={user} settled={settled} onSettle={markSettled} />
         )}
         {view === "admin" && user.isSuperuser && (
           <AdminPanel session={session} />
+        )}
+        {view === "alerts" && (
+          <NotificationSettings
+            notifStatus={notifStatus}
+            notifPrefs={notifPrefs}
+            onInitNotifications={initNotifications}
+            onPrefsChange={setNotifPrefs}
+            getAuthHeader={getAuthHeader}
+          />
         )}
       </div>
     </div>
@@ -761,7 +843,7 @@ function AdminPanel({ session }) {
 }
 
 /* ─── HEADER ─────────────────────────────────────────────────────── */
-function Header({ user, onLogout, onHome, onNew, onDebts, onAdmin, activeView }) {
+function Header({ user, onLogout, onHome, onNew, onDebts, onAdmin, onAlerts, activeView }) {
   return (
     <div style={{ borderBottom: `1px solid ${C.border}`, position: "sticky", top: 0, background: C.bg, zIndex: 20 }}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "13px 16px" }}>
@@ -774,8 +856,9 @@ function Header({ user, onLogout, onHome, onNew, onDebts, onAdmin, activeView })
       </div>
       <div style={{ display: "flex", borderTop: `1px solid ${C.border}` }}>
         {[
-          { id: "feed",  label: "Markets",   action: onHome  },
-          { id: "debts", label: "Settle Up",  action: onDebts },
+          { id: "feed",   label: "Markets",   action: onHome   },
+          { id: "debts",  label: "Settle Up", action: onDebts  },
+          { id: "alerts", label: "Alerts",    action: onAlerts },
           ...(user.isSuperuser ? [{ id: "admin", label: "Admin", action: onAdmin }] : []),
         ].map(({ id, label, action }) => (
           <button key={id} onClick={action}
@@ -1181,7 +1264,7 @@ function QuickBuyModal({ side, price, user, onReview, onCancel }) {
 }
 
 /* ─── MARKET DETAIL ──────────────────────────────────────────────── */
-function MarketDetail({ market, user, onUpdate, onBack }) {
+function MarketDetail({ market, user, onUpdate, onBack, onNotify }) {
   const [tab, setTab] = useState("chart");
   const [orderSide, setOrderSide] = useState("buy");
   const [orderPrice, setOrderPrice] = useState("");
@@ -1227,6 +1310,7 @@ function MarketDetail({ market, user, onUpdate, onBack }) {
     let trades   = [...(market.trades || [])];
     let remaining = o.size;
     const now = Date.now();
+    const filledUserIds = []; // track user IDs of matched resting orders
 
     if (o.side === "buy") {
       const matches = orders
@@ -1247,6 +1331,7 @@ function MarketDetail({ market, user, onUpdate, onBack }) {
         trades  = [{ price: ord.price, side: "YES bought", buyer: o.name, seller: ord.name, size: fillSize, ts: now + fillIdx }, ...trades];
         totalFilledSize += fillSize;
         totalFilledCost += (ord.price / 100) * fillSize;
+        if (ord.userId) filledUserIds.push(ord.userId);
         fillIdx++;
         const newOrdSize = parseFloat((ord.size - fillSize).toFixed(2));
         orders = newOrdSize <= 0.005
@@ -1280,6 +1365,7 @@ function MarketDetail({ market, user, onUpdate, onBack }) {
         trades  = [{ price: ord.price, side: "YES sold", buyer: ord.name, seller: o.name, size: fillSize, ts: now + fillIdx }, ...trades];
         totalFilledSize += fillSize;
         totalFilledCost += (ord.price / 100) * fillSize;
+        if (ord.userId) filledUserIds.push(ord.userId);
         fillIdx++;
         const newOrdSize = parseFloat((ord.size - fillSize).toFixed(2));
         orders = newOrdSize <= 0.005
@@ -1296,6 +1382,18 @@ function MarketDetail({ market, user, onUpdate, onBack }) {
     }
 
     onUpdate({ ...market, orders, priceHistory: history, trades });
+
+    // Fire notifications (async, fire-and-forget)
+    const filledSize = parseFloat((o.size - (remaining > 0.005 ? remaining : 0)).toFixed(2));
+    const displayPrice = o.displaySide === "no" ? 100 - o.price : o.price;
+    const participantUserIds = [...new Set(market.orders.map((x) => x.userId).filter(Boolean))];
+    onNotify?.("any_order", { marketId: market.id, marketTitle: market.title, orderName: o.name, side: o.displaySide === "no" ? "NO" : "YES", price: displayPrice, size: o.size });
+    if (filledSize > 0) {
+      onNotify?.("any_fill", { marketId: market.id, marketTitle: market.title, buyerName: o.side === "buy" ? o.name : "—", sellerName: o.side === "sell" ? o.name : "—", price: displayPrice, size: filledSize });
+      const ownFilledIds = [...new Set([...filledUserIds, ...(o.userId ? [o.userId] : [])])];
+      onNotify?.("own_fill", { marketId: market.id, marketTitle: market.title, price: displayPrice, size: filledSize, filledUserIds: ownFilledIds });
+    }
+    onNotify?.("market_activity", { marketId: market.id, marketTitle: market.title, orderName: o.name, size: o.size, participantUserIds });
 
     // Build receipt
     const isNo       = pendingOrder.displaySide === "no";
@@ -2015,6 +2113,95 @@ function HideUsersModal({ currentUserId, hiddenFrom, onChange, onClose }) {
           </button>
         </div>
       </div>
+    </div>
+  );
+}
+
+/* ─── NOTIFICATION SETTINGS ──────────────────────────────────────── */
+const PREF_LABELS = {
+  new_signup:      "New user signs up",
+  new_market:      "New market created",
+  any_order:       "Any order placed",
+  any_fill:        "Any order filled",
+  market_activity: "Activity in your markets",
+  own_fill:        "Your order is filled",
+};
+
+function NotificationSettings({ notifStatus, notifPrefs, onInitNotifications, onPrefsChange, getAuthHeader }) {
+  const [saving, setSaving] = useState(false);
+
+  const isSupported = typeof window !== "undefined" && "serviceWorker" in navigator && "PushManager" in window;
+  const isGranted   = notifStatus === "granted";
+  const isDenied    = notifStatus === "denied";
+
+  const toggle = async (key) => {
+    const newPrefs = { ...notifPrefs, [key]: !notifPrefs[key] };
+    onPrefsChange(newPrefs);
+    setSaving(true);
+    try {
+      const headers = await getAuthHeader();
+      await fetch(`${ADMIN_API}/push/preferences`, {
+        method: "POST",
+        headers: { ...headers, "Content-Type": "application/json" },
+        body: JSON.stringify({ preferences: newPrefs }),
+      });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div style={{ padding: 16 }}>
+      <div style={{ color: C.muted, fontSize: 10, letterSpacing: 1.5, textTransform: "uppercase", paddingBottom: 12, borderBottom: `1px solid ${C.border}`, marginBottom: 20 }}>
+        Notifications
+      </div>
+
+      {!isSupported && (
+        <div style={{ background: C.dim, border: `1px solid ${C.border}`, borderRadius: 8, padding: "12px 14px", fontSize: 12, color: C.muted }}>
+          Push notifications aren't supported in this browser.
+        </div>
+      )}
+
+      {isSupported && !isGranted && (
+        <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 10, padding: 20, marginBottom: 20 }}>
+          <p style={{ color: C.text, fontSize: 14, fontWeight: 700, margin: "0 0 6px" }}>Stay in the loop</p>
+          <p style={{ color: C.muted, fontSize: 12, lineHeight: 1.6, margin: "0 0 16px" }}>
+            Get notified when new markets open, orders fill, and more.
+          </p>
+          {isDenied ? (
+            <>
+              <div style={{ background: C.noDim, border: `1px solid ${C.no}44`, borderRadius: 7, padding: "10px 14px", fontSize: 12, color: C.muted }}>
+                Notifications are blocked. Allow them in your browser settings for this site, then revisit this page.
+              </div>
+            </>
+          ) : (
+            <button onClick={onInitNotifications}
+              style={{ background: C.gold, color: "#000", border: "none", borderRadius: 7, padding: "10px 18px", fontWeight: 800, fontSize: 13, cursor: "pointer", fontFamily: mono }}>
+              Enable notifications
+            </button>
+          )}
+        </div>
+      )}
+
+      {isGranted && (
+        <>
+          <p style={{ color: C.muted, fontSize: 12, marginBottom: 20 }}>
+            Notifications are on.{saving && " Saving…"}
+          </p>
+          {Object.entries(PREF_LABELS).map(([key, label]) => {
+            const on = notifPrefs?.[key] ?? false;
+            return (
+              <div key={key} onClick={() => toggle(key)}
+                style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "13px 14px", background: C.surface, border: `1px solid ${C.border}`, borderRadius: 8, marginBottom: 8, cursor: "pointer" }}>
+                <span style={{ fontSize: 13, color: C.text }}>{label}</span>
+                <div style={{ width: 38, height: 22, borderRadius: 11, background: on ? C.yes : C.dim, position: "relative", transition: "background 0.2s", flexShrink: 0 }}>
+                  <div style={{ position: "absolute", top: 4, left: on ? 20 : 4, width: 14, height: 14, borderRadius: "50%", background: "#fff", transition: "left 0.2s" }} />
+                </div>
+              </div>
+            );
+          })}
+        </>
+      )}
     </div>
   );
 }
