@@ -23,5 +23,12 @@ export default async function handler(req, res) {
   }, { onConflict: "user_id" });
 
   if (error) return res.status(500).json({ error: error.message });
+
+  // Ensure a preferences row exists with defaults — ignoreDuplicates so we don't overwrite custom settings
+  await admin.from("notification_preferences").upsert(
+    { user_id: user.id },
+    { onConflict: "user_id", ignoreDuplicates: true }
+  );
+
   return res.status(200).json({ success: true });
 }
