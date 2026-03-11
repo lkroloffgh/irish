@@ -10,12 +10,12 @@ const VAPID_SUBJECT = process.env.VAPID_SUBJECT || "mailto:admin@willdoug.irish"
 webpush.setVapidDetails(VAPID_SUBJECT, VAPID_PUBLIC, VAPID_PRIVATE);
 
 const NOTIFICATION_MESSAGES = {
-  new_signup:       (p) => ({ title: "New member ☘️",      body: `${p.userName} just joined.` }),
-  new_market:       (p) => ({ title: "New market 📈",       body: `${p.creatorName}: "${p.marketTitle}"` }),
-  any_order:        (p) => ({ title: "Order placed",        body: `${p.orderName} placed $${p.size} ${p.side} @ ${p.price}¢ on "${p.marketTitle}"` }),
-  any_fill:         (p) => ({ title: "Trade executed ⚡",   body: `${p.buyerName} & ${p.sellerName} traded $${p.size} @ ${p.price}¢ on "${p.marketTitle}"` }),
-  market_activity:  (p) => ({ title: "Activity in your market", body: `${p.orderName} placed $${p.size} on "${p.marketTitle}"` }),
-  own_fill:         (p) => ({ title: "Your order filled ⚡", body: `$${p.size} filled @ ${p.price}¢ on "${p.marketTitle}"` }),
+  new_signup:        (p) => ({ title: "New member ☘️",            body: `${p.userName} just joined.` }),
+  new_market:        (p) => ({ title: "New market 📈",             body: `${p.creatorName}: "${p.marketTitle}"` }),
+  any_fill:          (p) => ({ title: "Trade executed ⚡",         body: `${p.buyerName} & ${p.sellerName} traded $${p.size} @ ${p.price}¢ on "${p.marketTitle}"` }),
+  your_market_order: (p) => ({ title: "Order in your market",      body: `${p.orderName} placed $${p.size} on "${p.marketTitle}"` }),
+  market_resolved:   (p) => ({ title: "Market resolved 🏁",        body: `"${p.marketTitle}" resolved ${p.resolvedAs}` }),
+  own_fill:          (p) => ({ title: "Your order filled ⚡",      body: `$${p.size} filled @ ${p.price}¢ on "${p.marketTitle}"` }),
 };
 
 export default async function handler(req, res) {
@@ -37,29 +37,30 @@ export default async function handler(req, res) {
   const { data: allPrefs } = await admin.from("notification_preferences").select("user_id, " + type).eq(type, true);
   const interestedUserIds = new Set((allPrefs || []).map((p) => p.user_id));
 
-  if (type === "market_activity" && payload.marketId) {
-    // Users with open orders in this market (by user_id) + any extra IDs from client
+  if (type === "your_market_order" || type === "market_resolved") {
+    // Notify users who are participants in this market (created it or placed orders)
     const { data: ordUsers } = await admin.from("orders").select("user_id").eq("market_id", payload.marketId);
     const marketParticipants = new Set((ordUsers || []).map((o) => o.user_id).filter(Boolean));
-    if (payload.participantUserIds && Array.isArray(payload.participantUserIds)) {
+    if (payload.participantUserIds) {
       for (const uid of payload.participantUserIds) marketParticipants.add(uid);
     }
     for (const uid of interestedUserIds) {
       if (marketParticipants.has(uid)) targetUserIds.add(uid);
     }
   } else if (type === "own_fill") {
-    // Only notify specific users whose orders were filled
-    const filledIds = payload.filledUserIds || [];
-    for (const uid of filledIds) {
+    // Only notify specific users whose resting orders were filled
+    for (const uid of (payload.filledUserIds || [])) {
       if (interestedUserIds.has(uid)) targetUserIds.add(uid);
     }
   } else {
-    // For global events (new_signup, new_market, any_order, any_fill)
-    // notify all opted-in users except the one who triggered the event
-    for (const uid of interestedUserIds) {
-      if (uid !== user.id) targetUserIds.add(uid);
-    }
+    // Global events: notify all opted-in users
+    for (const uid of interestedUserIds) targetUserIds.add(uid);
   }
+
+  // Always exclude users specified in excludeUserIds (the action's trigger)
+  for (const uid of (payload.excludeUserIds || [])) targetUserIds.delete(uid);
+  // Also always exclude the requesting user
+  targetUserIds.delete(user.id);
 
   if (targetUserIds.size === 0) return res.status(200).json({ sent: 0 });
 
@@ -71,8 +72,7 @@ export default async function handler(req, res) {
 
   if (!subs || subs.length === 0) return res.status(200).json({ sent: 0 });
 
-  const msgFn = NOTIFICATION_MESSAGES[type];
-  const msg = msgFn(payload);
+  const msg = NOTIFICATION_MESSAGES[type](payload);
 
   let sent = 0;
   const staleIds = [];
@@ -82,14 +82,10 @@ export default async function handler(req, res) {
       await webpush.sendNotification(subscription, JSON.stringify(msg));
       sent++;
     } catch (err) {
-      // 410 Gone = subscription expired, clean it up
-      if (err.statusCode === 410 || err.statusCode === 404) {
-        staleIds.push(user_id);
-      }
+      if (err.statusCode === 410 || err.statusCode === 404) staleIds.push(user_id);
     }
   }));
 
-  // Remove stale subscriptions
   if (staleIds.length > 0) {
     await admin.from("push_subscriptions").delete().in("user_id", staleIds);
   }

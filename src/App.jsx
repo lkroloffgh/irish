@@ -120,7 +120,7 @@ export default function App() {
   const [settled, setSettled]   = useState(new Set());
   const [isResetFlow, setIsResetFlow] = useState(false);
 
-  const DEFAULT_NOTIF_PREFS = { new_signup: false, new_market: true, any_order: false, any_fill: false, market_activity: true, own_fill: true };
+  const DEFAULT_NOTIF_PREFS = { new_signup: false, new_market: true, any_fill: false, your_market_order: true, market_resolved: true, own_fill: true };
   const [notifStatus, setNotifStatus] = useState(() => (typeof Notification !== "undefined" ? Notification.permission : "default"));
   const [notifPrefs, setNotifPrefs] = useState(DEFAULT_NOTIF_PREFS);
 
@@ -145,7 +145,7 @@ export default function App() {
         if (event === "SIGNED_IN" && session.user.created_at && session.user.last_sign_in_at) {
           const diff = Math.abs(new Date(session.user.last_sign_in_at) - new Date(session.user.created_at));
           if (diff < 10000) {
-            setTimeout(() => sendNotif("new_signup", { userName: session.user.user_metadata?.display_name || "Someone" }), 3000);
+            setTimeout(() => sendNotif("new_signup", { userName: session.user.user_metadata?.display_name || "Someone", excludeUserIds: [session.user.id] }), 3000);
           }
         }
       } else {
@@ -303,7 +303,7 @@ export default function App() {
       })));
     }
     setView("feed");
-    sendNotif("new_market", { marketTitle: m.title, creatorName: m.creatorName, marketId: m.id });
+    sendNotif("new_market", { marketTitle: m.title, creatorName: m.creatorName, marketId: m.id, excludeUserIds: [m.creator] });
   };
 
   const updateMarket = async (updated) => {
@@ -1386,14 +1386,13 @@ function MarketDetail({ market, user, onUpdate, onBack, onNotify }) {
     // Fire notifications (async, fire-and-forget)
     const filledSize = parseFloat((o.size - (remaining > 0.005 ? remaining : 0)).toFixed(2));
     const displayPrice = o.displaySide === "no" ? 100 - o.price : o.price;
-    const participantUserIds = [...new Set(market.orders.map((x) => x.userId).filter(Boolean))];
-    onNotify?.("any_order", { marketId: market.id, marketTitle: market.title, orderName: o.name, side: o.displaySide === "no" ? "NO" : "YES", price: displayPrice, size: o.size });
+    const participantUserIds = [...new Set([market.creator, ...market.orders.map((x) => x.userId)].filter(Boolean))];
     if (filledSize > 0) {
-      onNotify?.("any_fill", { marketId: market.id, marketTitle: market.title, buyerName: o.side === "buy" ? o.name : "—", sellerName: o.side === "sell" ? o.name : "—", price: displayPrice, size: filledSize });
-      const ownFilledIds = [...new Set([...filledUserIds, ...(o.userId ? [o.userId] : [])])];
-      onNotify?.("own_fill", { marketId: market.id, marketTitle: market.title, price: displayPrice, size: filledSize, filledUserIds: ownFilledIds });
+      onNotify?.("any_fill", { marketId: market.id, marketTitle: market.title, buyerName: o.side === "buy" ? o.name : "—", sellerName: o.side === "sell" ? o.name : "—", price: displayPrice, size: filledSize, excludeUserIds: [o.userId, ...filledUserIds].filter(Boolean) });
+      // Notify only resting order holders (not the active placer)
+      onNotify?.("own_fill", { marketId: market.id, marketTitle: market.title, price: displayPrice, size: filledSize, filledUserIds });
     }
-    onNotify?.("market_activity", { marketId: market.id, marketTitle: market.title, orderName: o.name, size: o.size, participantUserIds });
+    onNotify?.("your_market_order", { marketId: market.id, marketTitle: market.title, orderName: o.name, size: o.size, participantUserIds, excludeUserIds: [o.userId] });
 
     // Build receipt
     const isNo       = pendingOrder.displaySide === "no";
@@ -1416,6 +1415,8 @@ function MarketDetail({ market, user, onUpdate, onBack, onNotify }) {
   const handleResolve = (result, note) => {
     onUpdate({ ...market, status: "resolved", resolvedAs: result, resolvedNote: note || `Resolved ${result}.`, orders: [], resolvedAt: Date.now() });
     setShowResolve(false);
+    const participantUserIds = [...new Set([market.creator, ...market.orders.map((x) => x.userId)].filter(Boolean))];
+    onNotify?.("market_resolved", { marketId: market.id, marketTitle: market.title, resolvedAs: result, participantUserIds, excludeUserIds: [user.id] });
   };
 
   const TabBtn = ({ id, label }) => (
@@ -2119,12 +2120,12 @@ function HideUsersModal({ currentUserId, hiddenFrom, onChange, onClose }) {
 
 /* ─── NOTIFICATION SETTINGS ──────────────────────────────────────── */
 const PREF_LABELS = {
-  new_signup:      "New user signs up",
-  new_market:      "New market created",
-  any_order:       "Any order placed",
-  any_fill:        "Any order filled",
-  market_activity: "Activity in your markets",
-  own_fill:        "Your order is filled",
+  new_signup:        "New user signs up",
+  new_market:        "New market created",
+  any_fill:          "Any trade executed",
+  your_market_order: "Order placed in your markets",
+  market_resolved:   "Your market is resolved",
+  own_fill:          "Your resting order is filled",
 };
 
 function NotificationSettings({ notifStatus, notifPrefs, onInitNotifications, onPrefsChange, getAuthHeader }) {

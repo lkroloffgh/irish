@@ -25,7 +25,7 @@ export default async function handler(req, res) {
     const { preferences } = req.body;
     if (!preferences) return res.status(400).json({ error: "preferences required" });
 
-    const allowed = ["new_signup", "new_market", "any_order", "any_fill", "market_activity", "own_fill"];
+    const allowed = ["new_signup", "new_market", "any_fill", "your_market_order", "market_resolved", "own_fill"];
     const filtered = {};
     for (const key of allowed) {
       if (typeof preferences[key] === "boolean") filtered[key] = preferences[key];
