@@ -120,7 +120,7 @@ export default function App() {
   const [settled, setSettled]   = useState(new Set());
   const [isResetFlow, setIsResetFlow] = useState(false);
 
-  const DEFAULT_NOTIF_PREFS = { new_signup: false, new_market: true, any_fill: false, your_market_order: true, market_resolved: true, own_fill: true };
+  const DEFAULT_NOTIF_PREFS = { new_signup: false, new_market: true, any_fill: false, your_market_order: true, market_resolved: true, any_market_resolved: false, own_fill: true };
   const [notifStatus, setNotifStatus] = useState(() => (typeof Notification !== "undefined" ? Notification.permission : "default"));
   const [notifPrefs, setNotifPrefs] = useState(DEFAULT_NOTIF_PREFS);
 
@@ -176,14 +176,14 @@ export default function App() {
     return s ? { Authorization: `Bearer ${s.access_token}` } : {};
   };
 
-  const sendNotif = async (type, payload) => {
+  const sendNotif = async (event, payload) => {
     try {
       const headers = await getAuthHeader();
       if (!headers.Authorization) return;
       await fetch(`${ADMIN_API}/push/send`, {
         method: "POST",
         headers: { ...headers, "Content-Type": "application/json" },
-        body: JSON.stringify({ type, payload }),
+        body: JSON.stringify({ event, payload }),
       });
     } catch {}
   };
@@ -1383,16 +1383,17 @@ function MarketDetail({ market, user, onUpdate, onBack, onNotify }) {
 
     onUpdate({ ...market, orders, priceHistory: history, trades });
 
-    // Fire notifications (async, fire-and-forget)
+    // Fire single notification event — server applies priority dedup per user
     const filledSize = parseFloat((o.size - (remaining > 0.005 ? remaining : 0)).toFixed(2));
     const displayPrice = o.displaySide === "no" ? 100 - o.price : o.price;
     const participantUserIds = [...new Set([market.creator, ...market.orders.map((x) => x.userId)].filter(Boolean))];
-    if (filledSize > 0) {
-      onNotify?.("any_fill", { marketId: market.id, marketTitle: market.title, buyerName: o.side === "buy" ? o.name : "—", sellerName: o.side === "sell" ? o.name : "—", price: displayPrice, size: filledSize, excludeUserIds: [o.userId, ...filledUserIds].filter(Boolean) });
-      // Notify only resting order holders (not the active placer)
-      onNotify?.("own_fill", { marketId: market.id, marketTitle: market.title, price: displayPrice, size: filledSize, filledUserIds });
-    }
-    onNotify?.("your_market_order", { marketId: market.id, marketTitle: market.title, orderName: o.name, size: o.size, participantUserIds, excludeUserIds: [o.userId] });
+    onNotify?.("order_confirmed", {
+      marketId: market.id, marketTitle: market.title,
+      orderName: o.name, side: o.displaySide === "no" ? "NO" : "YES",
+      price: displayPrice, size: o.size,
+      filledSize, filledUserIds, participantUserIds,
+      excludeUserIds: [o.userId],
+    });
 
     // Build receipt
     const isNo       = pendingOrder.displaySide === "no";
@@ -1417,6 +1418,7 @@ function MarketDetail({ market, user, onUpdate, onBack, onNotify }) {
     setShowResolve(false);
     const participantUserIds = [...new Set([market.creator, ...market.orders.map((x) => x.userId)].filter(Boolean))];
     onNotify?.("market_resolved", { marketId: market.id, marketTitle: market.title, resolvedAs: result, participantUserIds, excludeUserIds: [user.id] });
+    // Note: send.js handles market_resolved vs any_market_resolved priority dedup
   };
 
   const TabBtn = ({ id, label }) => (
@@ -2120,12 +2122,13 @@ function HideUsersModal({ currentUserId, hiddenFrom, onChange, onClose }) {
 
 /* ─── NOTIFICATION SETTINGS ──────────────────────────────────────── */
 const PREF_LABELS = {
-  new_signup:        "New user signs up",
-  new_market:        "New market created",
-  any_fill:          "Any trade executed",
-  your_market_order: "Order placed in your markets",
-  market_resolved:   "Your market is resolved",
-  own_fill:          "Your resting order is filled",
+  new_signup:          "New user signs up",
+  new_market:          "New market created",
+  any_fill:            "Any trade executed",
+  your_market_order:   "Order placed in your markets",
+  market_resolved:     "Your market is resolved",
+  any_market_resolved: "Any market is resolved",
+  own_fill:            "Your resting order is filled",
 };
 
 function NotificationSettings({ notifStatus, notifPrefs, onInitNotifications, onPrefsChange, getAuthHeader }) {

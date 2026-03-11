@@ -13,14 +13,18 @@ CREATE POLICY "Users manage own subscription"
   USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
 
 -- Notification preferences (one row per user)
+-- Priority rules (server enforces, one notification per user per event):
+--   order event:   own_fill > your_market_order > any_fill
+--   resolve event: market_resolved > any_market_resolved
 CREATE TABLE IF NOT EXISTS notification_preferences (
-  user_id           UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
-  new_signup        BOOLEAN DEFAULT false,  -- new user joins
-  new_market        BOOLEAN DEFAULT true,   -- new market created (not by you)
-  any_fill          BOOLEAN DEFAULT false,  -- any trade executed (not involving you)
-  your_market_order BOOLEAN DEFAULT true,   -- order placed in a market you created or traded in
-  market_resolved   BOOLEAN DEFAULT true,   -- a market you created or traded in is resolved
-  own_fill          BOOLEAN DEFAULT true    -- your resting order is filled by someone else
+  user_id             UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
+  new_signup          BOOLEAN DEFAULT false,  -- new user joins
+  new_market          BOOLEAN DEFAULT true,   -- new market created (not by you)
+  any_fill            BOOLEAN DEFAULT false,  -- any trade executed (not involving you)
+  your_market_order   BOOLEAN DEFAULT true,   -- order placed in a market you created/traded in
+  market_resolved     BOOLEAN DEFAULT true,   -- a market you created/traded in is resolved
+  any_market_resolved BOOLEAN DEFAULT false,  -- any market resolved (lower priority than market_resolved)
+  own_fill            BOOLEAN DEFAULT true    -- your resting order is filled by someone else
 );
 
 ALTER TABLE notification_preferences ENABLE ROW LEVEL SECURITY;
