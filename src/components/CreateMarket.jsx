@@ -125,20 +125,18 @@ export function CreateMarket({ user, onAdd, onCancel }) {
     const frac = (v - 1) / 98; // range = 99 - 1 = 98
     return `calc(${(frac * 100).toFixed(3)}% - ${(frac * THUMB_R * 2 - THUMB_R).toFixed(3)}px)`;
   };
-  // Clamped version for floating labels — prevents them from drifting off either edge.
+  // Clamped version for floating labels — tracks to within 8px of each edge.
   const tpLabel = (v) => {
     const frac = (v - 1) / 98;
     const inner = `calc(${(frac * 100).toFixed(3)}% - ${(frac * THUMB_R * 2 - THUMB_R).toFixed(3)}px)`;
-    return `clamp(18px, ${inner}, calc(100% - 18px))`;
+    return `clamp(8px, ${inner}, calc(100% - 8px))`;
   };
-  // Green up to bid, gold band bid→ask (the spread), red from ask onward.
-  // Slider range is 1–99 so bid=1 and ask=99 align with the visual track ends.
-  // Value is clamped to 6–94 so the thumb always stays centered in the gold band.
-  // At the hard stops, snap gradient edges to 0%/100% so no green/red sliver remains —
-  // hitting the limit feels like a bumper hitting a wall, not like there's room left.
-  const bidGrad = bid <= 1  ? "0%"   : tp(bid);
-  const askGrad = ask >= 99 ? "100%" : tp(ask);
-  const sliderTrack = `linear-gradient(to right, ${C.yes} 0%, ${C.yes} ${bidGrad}, ${C.gold} ${bidGrad}, ${C.gold} ${askGrad}, ${C.no} ${askGrad}, ${C.no} 100%)`;
+  // Green up to bid, gold band bid→ask, red from ask onward.
+  // At the hard stops, camouflage the green/red by matching C.surface so the gold band
+  // never changes width — no growth at the edge — while the limit still feels like a wall.
+  const greenColor = bid <= 1  ? C.surface : C.yes;
+  const redColor   = ask >= 99 ? C.surface : C.no;
+  const sliderTrack = `linear-gradient(to right, ${greenColor} 0%, ${greenColor} ${tp(bid)}, ${C.gold} ${tp(bid)}, ${C.gold} ${tp(ask)}, ${redColor} ${tp(ask)}, ${redColor} 100%)`;
 
   return (
     <div style={{ padding: 16 }}>
