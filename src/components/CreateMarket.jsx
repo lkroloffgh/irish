@@ -75,20 +75,21 @@ export function CreateMarket({ user, onAdd, onCancel }) {
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [resolution, setResolution] = useState("");
-  // bid is the buy YES price directly (1–89). ask = bid + 10, always a fixed 10¢ spread.
-  // Thumb sits at the bid — the exact left edge of the gold band — so there is never
-  // a partially-clipped spread region at the extremes.
-  const [mid, setMid] = useState(45);  // "mid" kept as state name for minimal diff; represents bid
+  // mid is the midpoint (6–94). bid = mid-5, ask = mid+5 → always a fixed 10¢ spread.
+  // The slider's visual range is 1–99, but the value is hard-clamped to 6–94 so that
+  // bid never goes below 1¢ and ask never goes above 99¢. At the limits, the gold band
+  // edges align with the visual track ends while the thumb stays centered in the band.
+  const [mid, setMid] = useState(50);
   const [size, setSize] = useState("5");
   const [err, setErr] = useState("");
   const [hiddenFrom, setHiddenFrom] = useState([]);
   const [showHideModal, setShowHideModal] = useState(false);
 
-  const bid = mid;        // Buy YES price  (thumb position)
-  const ask = mid + 10;  // Sell YES price
+  const bid = mid - 5;  // Buy YES price
+  const ask = mid + 5;  // Sell YES price
 
   const handleMidChange = (e) => {
-    const v = Math.max(1, Math.min(89, Number(e.target.value)));
+    const v = Math.max(6, Math.min(94, Number(e.target.value)));
     setMid(v);
   };
 
@@ -107,7 +108,7 @@ export function CreateMarket({ user, onAdd, onCancel }) {
       creator: user.id, creatorName: user.name, status: "open", resolvedAs: null, resolvedNote: null,
       createdAt: now,
       hiddenFrom,
-      priceHistory: generatePriceHistory(bid + 5, 5),
+      priceHistory: generatePriceHistory(mid, 5),
       orders: [
         { id: uid(), side: "buy",  price: bid,  size: Math.round(s * 100) / 100, userId: user.id, name: user.name },
         { id: uid(), side: "sell", price: ask, size: Math.round(s * 100) / 100, userId: user.id, name: user.name },
@@ -116,24 +117,23 @@ export function CreateMarket({ user, onAdd, onCancel }) {
     });
   };
 
-  // Maps a value in [1,99] to a CSS position on the slider track.
+  // Maps any value in [1,99] to a CSS position on the slider track (visual range 1–99).
   // The 18px thumb means the thumb travels from 9px to (100%-9px), not 0%–100%.
-  // Formula: frac * (100% - 18px) + 9px — compensates for thumb radius so stops
-  // align exactly with the thumb at all positions.
+  // Formula: frac * (100% - 18px) + 9px exactly matches thumb position at all values.
   const THUMB_R = 9; // half of the 18px thumb set in CSS
-  const RANGE = 98;  // max - min = 99 - 1
   const tp = (v) => {
-    const frac = (v - 1) / RANGE;
+    const frac = (v - 1) / 98; // range = 99 - 1 = 98
     return `calc(${(frac * 100).toFixed(3)}% - ${(frac * THUMB_R * 2 - THUMB_R).toFixed(3)}px)`;
   };
   // Clamped version for floating labels — prevents them from drifting off either edge.
   const tpLabel = (v) => {
-    const frac = (v - 1) / RANGE;
+    const frac = (v - 1) / 98;
     const inner = `calc(${(frac * 100).toFixed(3)}% - ${(frac * THUMB_R * 2 - THUMB_R).toFixed(3)}px)`;
     return `clamp(18px, ${inner}, calc(100% - 18px))`;
   };
-  // Green up to bid (thumb), gold band bid→ask (the spread), red from ask onward.
-  // Since thumb = bid, the gold band always starts exactly at the thumb — no asymmetry.
+  // Green up to bid, gold band bid→ask (the spread), red from ask onward.
+  // Slider range is 1–99 so bid=1 and ask=99 align with the visual track ends.
+  // Value is clamped to 6–94 so the thumb always stays centered in the gold band.
   const sliderTrack = `linear-gradient(to right, ${C.yes} 0%, ${C.yes} ${tp(bid)}, ${C.gold} ${tp(bid)}, ${C.gold} ${tp(ask)}, ${C.no} ${tp(ask)}, ${C.no} 100%)`;
 
   return (
@@ -180,7 +180,7 @@ export function CreateMarket({ user, onAdd, onCancel }) {
         {/* Midpoint label */}
         <div style={{ textAlign: "center", marginBottom: 10 }}>
           <span style={{ color: C.muted, fontSize: 11 }}>midpoint </span>
-          <span style={{ color: C.gold, fontWeight: 700, fontSize: 13 }}>{pct(bid + 5)}</span>
+          <span style={{ color: C.gold, fontWeight: 700, fontSize: 13 }}>{pct(mid)}</span>
           <span style={{ color: C.muted, fontSize: 11 }}> YES</span>
         </div>
 
@@ -198,7 +198,7 @@ export function CreateMarket({ user, onAdd, onCancel }) {
           </div>
           <input
             type="range"
-            min="1" max="89" step="1"
+            min="1" max="99" step="1"
             value={mid}
             onChange={handleMidChange}
             style={{
