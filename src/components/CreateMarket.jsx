@@ -117,14 +117,21 @@ export function CreateMarket({ user, onAdd, onCancel }) {
     });
   };
 
-  // Maps any value in [1,99] to a % position on the gradient track.
-  // Plain percentage — no thumb-radius compensation — so tp(1)=0% and tp(99)=100%.
-  // This means there is zero green at bid=1 and zero red at ask=99 by construction.
-  // The gradient-to-thumb alignment is off by at most ~9px/trackWidth (~1%) which is
-  // imperceptible, while eliminating the persistent green strip was the priority.
-  const tp = (v) => `${((v - 1) / 98 * 100).toFixed(3)}%`;
-  // Clamped version for floating labels — tracks to within 8px of each edge.
-  const tpLabel = (v) => `clamp(8px, ${((v - 1) / 98 * 100).toFixed(3)}%, calc(100% - 8px))`;
+  // Two coordinate systems:
+  //
+  // tp(v) — gradient stops on the custom track div.
+  //   The track div is inset 9px each side, spanning exactly the thumb travel range
+  //   [thumbCenter_min, thumbCenter_max]. Inside that div, simple % is correct:
+  //   tp(1)=0%, tp(99)=100% → no green/red strip at the hard stops, perfect alignment.
+  //
+  // tpLabel(v) — floating labels in the full-width outer container.
+  //   Labels need the compensated formula so they sit over the actual thumb positions.
+  //   calc(frac*(100%-18px)+9px) maps value→browser thumb center in the outer container.
+  const tp      = (v) => `${((v - 1) / 98 * 100).toFixed(3)}%`;
+  const tpLabel = (v) => {
+    const frac = (v - 1) / 98;
+    return `clamp(8px, calc(${(frac * 100).toFixed(3)}% - ${(frac * 18 - 9).toFixed(3)}px), calc(100% - 8px))`;
+  };
   // Green up to bid, gold band bid→ask, red from ask onward.
   // Track has square ends (no border-radius) so there is no rounded cap to pop in/out
   // as the gold band approaches the edge.
@@ -190,18 +197,24 @@ export function CreateMarket({ user, onAdd, onCancel }) {
             <div style={{ fontSize: 12, fontWeight: 700, color: C.no, fontFamily: mono }}>{cents(ask)}</div>
             <div style={{ fontSize: 8, color: C.no, marginTop: 1 }}>▼</div>
           </div>
+          {/* Custom track — inset 9px each side = exact thumb travel range.
+              Simple % gradient aligns perfectly here; input bg is transparent. */}
+          <div style={{
+            position: "absolute", bottom: 0, left: 9, right: 9, height: 6,
+            background: sliderTrack, pointerEvents: "none",
+          }} />
           <input
             type="range"
             min="1" max="99" step="1"
             value={mid}
             onChange={handleMidChange}
             style={{
+              display: "block",
               width: "100%",
               appearance: "none",
               WebkitAppearance: "none",
               height: 6,
-              borderRadius: 0,
-              background: sliderTrack,
+              background: "transparent",
               outline: "none",
               cursor: "pointer",
             }}
@@ -254,6 +267,8 @@ export function CreateMarket({ user, onAdd, onCancel }) {
       </button>
 
       <style>{`
+        input[type=range]::-webkit-slider-runnable-track { background: transparent; }
+        input[type=range]::-moz-range-track               { background: transparent; }
         input[type=range]::-webkit-slider-thumb {
           -webkit-appearance: none;
           width: 18px; height: 18px;
