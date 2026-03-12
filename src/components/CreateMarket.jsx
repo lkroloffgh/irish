@@ -210,7 +210,11 @@ export function CreateMarket({ user, onAdd, onCancel }) {
             onChange={handleMidChange}
             style={{
               display: "block",
+              position: "relative",
+              zIndex: 1,
               width: "100%",
+              margin: 0,
+              padding: 0,
               appearance: "none",
               WebkitAppearance: "none",
               height: 6,
@@ -274,14 +278,14 @@ export function CreateMarket({ user, onAdd, onCancel }) {
           width: 18px; height: 18px;
           border-radius: 50%;
           background: ${C.gold};
-          border: 2px solid rgba(255,255,255,0.35);
+          border: 2px solid ${C.surface};
           cursor: pointer;
         }
         input[type=range]::-moz-range-thumb {
           width: 18px; height: 18px;
           border-radius: 50%;
           background: ${C.gold};
-          border: 2px solid rgba(255,255,255,0.35);
+          border: 2px solid ${C.surface};
           cursor: pointer;
         }
       `}</style>
