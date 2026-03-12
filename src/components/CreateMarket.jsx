@@ -114,8 +114,20 @@ export function CreateMarket({ user, onAdd, onCancel }) {
     });
   };
 
-  // Slider range is 6–94 (span of 88). Convert a value to % position on track.
-  const tp = (v) => `${((v - 6) / 88) * 100}%`;
+  // Maps a value in [6,94] to a CSS position on the slider track.
+  // The 18px thumb means the thumb travels from 9px to (100%-9px), not 0%–100%.
+  // This formula compensates so gradient stops align exactly with the thumb at all positions.
+  const THUMB_R = 9; // half of the 18px thumb set in CSS
+  const tp = (v) => {
+    const frac = (v - 6) / 88;
+    return `calc(${(frac * 100).toFixed(3)}% - ${(frac * THUMB_R * 2 - THUMB_R).toFixed(3)}px)`;
+  };
+  // Clamped version for floating labels — prevents them from drifting off either edge.
+  const tpLabel = (v) => {
+    const frac = (v - 6) / 88;
+    const inner = `calc(${(frac * 100).toFixed(3)}% - ${(frac * THUMB_R * 2 - THUMB_R).toFixed(3)}px)`;
+    return `clamp(18px, ${inner}, calc(100% - 18px))`;
+  };
   // Green up to bid, gold band bid→ask (the spread), red from ask onward
   const sliderTrack = `linear-gradient(to right, ${C.yes} 0%, ${C.yes} ${tp(bid)}, ${C.gold} ${tp(bid)}, ${C.gold} ${tp(ask)}, ${C.no} ${tp(ask)}, ${C.no} 100%)`;
 
@@ -170,12 +182,12 @@ export function CreateMarket({ user, onAdd, onCancel }) {
         {/* Slider */}
         <div style={{ position: "relative", marginBottom: 6, paddingTop: 26 }}>
           {/* Floating bid label — tracks the buy YES price */}
-          <div style={{ position: "absolute", top: 0, left: tp(bid), transform: "translateX(-50%)", textAlign: "center", pointerEvents: "none", lineHeight: 1.2 }}>
+          <div style={{ position: "absolute", top: 0, left: tpLabel(bid), transform: "translateX(-50%)", textAlign: "center", pointerEvents: "none", lineHeight: 1.2 }}>
             <div style={{ fontSize: 12, fontWeight: 700, color: C.yes, fontFamily: mono }}>{cents(bid)}</div>
             <div style={{ fontSize: 8, color: C.yes, marginTop: 1 }}>▼</div>
           </div>
           {/* Floating ask label — tracks the sell YES price */}
-          <div style={{ position: "absolute", top: 0, left: tp(ask), transform: "translateX(-50%)", textAlign: "center", pointerEvents: "none", lineHeight: 1.2 }}>
+          <div style={{ position: "absolute", top: 0, left: tpLabel(ask), transform: "translateX(-50%)", textAlign: "center", pointerEvents: "none", lineHeight: 1.2 }}>
             <div style={{ fontSize: 12, fontWeight: 700, color: C.no, fontFamily: mono }}>{cents(ask)}</div>
             <div style={{ fontSize: 8, color: C.no, marginTop: 1 }}>▼</div>
           </div>
