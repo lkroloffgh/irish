@@ -117,20 +117,14 @@ export function CreateMarket({ user, onAdd, onCancel }) {
     });
   };
 
-  // Maps any value in [1,99] to a CSS position on the slider track (visual range 1–99).
-  // The 18px thumb means the thumb travels from 9px to (100%-9px), not 0%–100%.
-  // Formula: frac * (100% - 18px) + 9px exactly matches thumb position at all values.
-  const THUMB_R = 9; // half of the 18px thumb set in CSS
-  const tp = (v) => {
-    const frac = (v - 1) / 98; // range = 99 - 1 = 98
-    return `calc(${(frac * 100).toFixed(3)}% - ${(frac * THUMB_R * 2 - THUMB_R).toFixed(3)}px)`;
-  };
+  // Maps any value in [1,99] to a % position on the gradient track.
+  // Plain percentage — no thumb-radius compensation — so tp(1)=0% and tp(99)=100%.
+  // This means there is zero green at bid=1 and zero red at ask=99 by construction.
+  // The gradient-to-thumb alignment is off by at most ~9px/trackWidth (~1%) which is
+  // imperceptible, while eliminating the persistent green strip was the priority.
+  const tp = (v) => `${((v - 1) / 98 * 100).toFixed(3)}%`;
   // Clamped version for floating labels — tracks to within 8px of each edge.
-  const tpLabel = (v) => {
-    const frac = (v - 1) / 98;
-    const inner = `calc(${(frac * 100).toFixed(3)}% - ${(frac * THUMB_R * 2 - THUMB_R).toFixed(3)}px)`;
-    return `clamp(8px, ${inner}, calc(100% - 8px))`;
-  };
+  const tpLabel = (v) => `clamp(8px, ${((v - 1) / 98 * 100).toFixed(3)}%, calc(100% - 8px))`;
   // Green up to bid, gold band bid→ask, red from ask onward.
   // Track has square ends (no border-radius) so there is no rounded cap to pop in/out
   // as the gold band approaches the edge.
