@@ -551,18 +551,32 @@ export function MarketDetail({ market, user, onUpdate, onBack, onNotify }) {
             </div>
             {/* Quick action buttons */}
             <div style={{ display: "flex", gap: 8, marginTop: 12, marginBottom: 4 }}>
-              <button
-                onClick={() => sells.length > 0 && setQuickBuy({ side: "buy", price: bestAsk })}
-                disabled={sells.length === 0}
-                style={{ flex: 1, background: C.yesDim, color: sells.length > 0 ? C.yes : C.muted, border: `1px solid ${sells.length > 0 ? C.yes + "55" : C.border}`, borderRadius: 7, padding: "10px 0", fontSize: 13, fontWeight: 700, cursor: sells.length > 0 ? "pointer" : "default", fontFamily: mono }}>
-                {sells.length > 0 ? `YES ${cents(bestAsk)}` : "NO ASKS"}
-              </button>
-              <button
-                onClick={() => buys.length > 0 && setQuickBuy({ side: "sell", price: bestBid })}
-                disabled={buys.length === 0}
-                style={{ flex: 1, background: C.noDim, color: buys.length > 0 ? C.no : C.muted, border: `1px solid ${buys.length > 0 ? C.no + "55" : C.border}`, borderRadius: 7, padding: "10px 0", fontSize: 13, fontWeight: 700, cursor: buys.length > 0 ? "pointer" : "default", fontFamily: mono }}>
-                {buys.length > 0 ? `NO ${cents(100 - bestBid)}` : "NO BIDS"}
-              </button>
+              {sells.length > 0 ? (
+                <button
+                  onClick={() => setQuickBuy({ side: "buy", price: bestAsk })}
+                  style={{ flex: 1, background: C.yesDim, color: C.yes, border: `1px solid ${C.yes}55`, borderRadius: 7, padding: "10px 0", fontSize: 13, fontWeight: 700, cursor: "pointer", fontFamily: mono }}>
+                  YES {cents(bestAsk)}
+                </button>
+              ) : (
+                <button
+                  onClick={() => { setTab("book"); setOrderSide("buy"); }}
+                  style={{ flex: 1, background: "transparent", color: C.yes, border: `1px solid ${C.yes}33`, borderRadius: 7, padding: "10px 0", fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: mono }}>
+                  BID YES →
+                </button>
+              )}
+              {buys.length > 0 ? (
+                <button
+                  onClick={() => setQuickBuy({ side: "sell", price: bestBid })}
+                  style={{ flex: 1, background: C.noDim, color: C.no, border: `1px solid ${C.no}55`, borderRadius: 7, padding: "10px 0", fontSize: 13, fontWeight: 700, cursor: "pointer", fontFamily: mono }}>
+                  NO {cents(100 - bestBid)}
+                </button>
+              ) : (
+                <button
+                  onClick={() => { setTab("book"); setOrderSide("sell"); }}
+                  style={{ flex: 1, background: "transparent", color: C.no, border: `1px solid ${C.no}33`, borderRadius: 7, padding: "10px 0", fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: mono }}>
+                  OFFER NO →
+                </button>
+              )}
             </div>
           </>
         )}
