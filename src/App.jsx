@@ -2158,8 +2158,10 @@ function NotificationSettings({ notifStatus, notifPrefs, onInitNotifications, on
   }, []);
 
   const isSupported = typeof window !== "undefined" && "serviceWorker" in navigator && "PushManager" in window;
-  const isGranted   = notifStatus === "granted";
-  const isDenied    = notifStatus === "denied";
+  // Also read Notification.permission live — React state can be stale if permission changed outside React
+  const livePermission = typeof Notification !== "undefined" ? Notification.permission : "default";
+  const isGranted   = notifStatus === "granted" || livePermission === "granted";
+  const isDenied    = !isGranted && (notifStatus === "denied" || livePermission === "denied");
 
   const toggle = async (key) => {
     const newPrefs = { ...notifPrefs, [key]: !notifPrefs[key] };
