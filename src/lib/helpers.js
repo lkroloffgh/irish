@@ -1,11 +1,25 @@
 export const cents = (n) => `${Math.round(n)}¢`;
 export const pct   = (n) => `${Math.round(n)}%`;
-export const uid   = () => Math.random().toString(36).slice(2, 9);
+export const uid   = () => crypto.randomUUID();
+
+export const FILL_EPSILON = 0.005;
 
 export const parseNum = (v) => {
-  const n = Number(String(v).trim().replace(",", "."));
+  const n = Number(String(v).trim().replace(/,/g, ""));
   return isNaN(n) ? NaN : n;
 };
+
+/** Returns the mid-market price from an orders array, or 50 if no orders exist. */
+export function computeMid(orders = []) {
+  const buys  = orders.filter(o => o.side === "buy").sort((a, b) => b.price - a.price);
+  const sells = orders.filter(o => o.side === "sell").sort((a, b) => a.price - b.price);
+  const bestBid = buys[0]?.price;
+  const bestAsk = sells[0]?.price;
+  if (bestBid !== undefined && bestAsk !== undefined) return Math.round((bestBid + bestAsk) / 2);
+  if (bestBid !== undefined) return bestBid;
+  if (bestAsk !== undefined) return bestAsk;
+  return 50;
+}
 
 export function urlBase64ToUint8Array(base64String) {
   const padding = "=".repeat((4 - (base64String.length % 4)) % 4);

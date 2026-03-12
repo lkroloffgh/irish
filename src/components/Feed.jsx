@@ -1,6 +1,6 @@
 import { LineChart, Line, ResponsiveContainer } from "recharts";
 import { C, mono } from "../lib/constants.js";
-import { cents, pct } from "../lib/helpers.js";
+import { cents, pct, computeMid } from "../lib/helpers.js";
 
 /* ─── FEED ───────────────────────────────────────────────────────── */
 export function Feed({ markets, onOpen }) {
@@ -40,7 +40,7 @@ function MarketCard({ m, onOpen }) {
   const sells = m.orders.filter((o) => o.side === "sell").sort((a, b) => a.price - b.price);
   const bestBid = buys[0]?.price ?? 0;
   const bestAsk = sells[0]?.price ?? 100;
-  const mid = bestBid && bestAsk ? Math.round((bestBid + bestAsk) / 2) : bestBid || bestAsk || 50;
+  const mid = computeMid(m.orders);
   const last  = m.priceHistory[m.priceHistory.length - 1]?.yes ?? mid;
   const prev  = m.priceHistory[m.priceHistory.length - 5]?.yes ?? last;
   const delta = last - prev;
@@ -71,7 +71,7 @@ function MarketCard({ m, onOpen }) {
             ) : (
               <>
                 <div style={{ fontSize: 22, fontWeight: 800, color: displayColor, lineHeight: 1 }}>{pct(mid)}</div>
-                <div style={{ fontSize: 11, color: delta >= 0 ? C.yes : C.no, marginTop: 2 }}>{delta >= 0 ? "▲" : "▼"} {Math.abs(delta)}pp</div>
+                <div style={{ fontSize: 11, color: delta > 0 ? C.yes : delta < 0 ? C.no : C.muted, marginTop: 2 }}>{delta > 0 ? "▲" : delta < 0 ? "▼" : "–"} {Math.abs(delta)}pp</div>
               </>
             )}
           </div>

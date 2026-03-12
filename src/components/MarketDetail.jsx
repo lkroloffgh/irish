@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, ReferenceLine } from "recharts";
 import { C, mono, inputStyle, labelStyle } from "../lib/constants.js";
-import { cents, pct, uid, parseNum, fmtChartTs, fmtTooltipTs } from "../lib/helpers.js";
+import { cents, pct, uid, parseNum, fmtChartTs, fmtTooltipTs, computeMid, FILL_EPSILON } from "../lib/helpers.js";
 
 /* ─── DETAIL ROW ─────────────────────────────────────────────────── */
 function DetailRow({ label, value, color, bold, truncate }) {
@@ -37,13 +37,13 @@ function OrderConfirmModal({ order, market, onConfirm, onCancel }) {
   let remaining = order.size;
   const fills = [];
   for (const o of matchPool) {
-    if (remaining <= 0.005) break;
+    if (remaining <= FILL_EPSILON) break;
     const sz = parseFloat(Math.min(remaining, o.size).toFixed(2));
     // For NO buyers, fill price shown as NO price (100 - yesPrice)
     fills.push({ yesPrice: o.price, displayPrice: isNo ? 100 - o.price : o.price, size: sz, name: o.name });
     remaining = parseFloat((remaining - sz).toFixed(2));
   }
-  const restSize   = remaining > 0.005 ? remaining : 0;
+  const restSize   = remaining > FILL_EPSILON ? remaining : 0;
   const filledSize = parseFloat((order.size - restSize).toFixed(2));
 
   // Track YES-price VWAP separately (for avg display price calc), but show cost in display denomination
@@ -61,8 +61,8 @@ function OrderConfirmModal({ order, market, onConfirm, onCancel }) {
   const maxPayout    = order.size;
 
   const fillsFully  = restSize === 0 && filledSize > 0;
-  const fillsPartly = filledSize > 0.005 && restSize > 0.005;
-  const noFill      = filledSize <= 0.005;
+  const fillsPartly = filledSize > FILL_EPSILON && restSize > FILL_EPSILON;
+  const noFill      = filledSize <= FILL_EPSILON;
 
   const outcomeLabel = isNo ? "NO" : "YES";
   const fillNote = fillsFully
@@ -313,7 +313,7 @@ export function MarketDetail({ market, user, onUpdate, onBack, onNotify }) {
   const sells = market.orders.filter((o) => o.side === "sell").sort((a, b) => a.price - b.price);
   const bestBid = buys[0]?.price ?? 0;
   const bestAsk = sells[0]?.price ?? 100;
-  const mid = bestBid && bestAsk ? Math.round((bestBid + bestAsk) / 2) : bestBid || bestAsk || 50;
+  const mid = computeMid(market.orders);
   const spread = bestAsk - bestBid;
 
   const handleReview = () => {
@@ -353,7 +353,7 @@ export function MarketDetail({ market, user, onUpdate, onBack, onNotify }) {
       let fillIdx = 0;
 
       for (const { ord } of matches) {
-        if (remaining <= 0.005) break;
+        if (remaining <= FILL_EPSILON) break;
         const fillSize = parseFloat(Math.min(remaining, ord.size).toFixed(2));
         remaining = parseFloat((remaining - fillSize).toFixed(2));
         // Stagger timestamps by 1ms so each fill shows as a distinct chart point
@@ -364,7 +364,7 @@ export function MarketDetail({ market, user, onUpdate, onBack, onNotify }) {
         if (ord.userId) filledUserIds.push(ord.userId);
         fillIdx++;
         const newOrdSize = parseFloat((ord.size - fillSize).toFixed(2));
-        orders = newOrdSize <= 0.005
+        orders = newOrdSize <= FILL_EPSILON
           ? orders.filter((x) => x.id !== ord.id)
           : orders.map((x) => x.id === ord.id ? { ...x, size: newOrdSize } : x);
       }
@@ -375,7 +375,7 @@ export function MarketDetail({ market, user, onUpdate, onBack, onNotify }) {
         history = [...history, { ts: now + fillIdx, yes: vwap }];
       }
 
-      if (remaining > 0.005) orders = [...orders, { ...o, size: remaining }];
+      if (remaining > FILL_EPSILON) orders = [...orders, { ...o, size: remaining }];
 
     } else {
       const matches = orders
@@ -388,7 +388,7 @@ export function MarketDetail({ market, user, onUpdate, onBack, onNotify }) {
       let fillIdx = 0;
 
       for (const { ord } of matches) {
-        if (remaining <= 0.005) break;
+        if (remaining <= FILL_EPSILON) break;
         const fillSize = parseFloat(Math.min(remaining, ord.size).toFixed(2));
         remaining = parseFloat((remaining - fillSize).toFixed(2));
         history = [...history, { ts: now + fillIdx, yes: ord.price }];
@@ -398,7 +398,7 @@ export function MarketDetail({ market, user, onUpdate, onBack, onNotify }) {
         if (ord.userId) filledUserIds.push(ord.userId);
         fillIdx++;
         const newOrdSize = parseFloat((ord.size - fillSize).toFixed(2));
-        orders = newOrdSize <= 0.005
+        orders = newOrdSize <= FILL_EPSILON
           ? orders.filter((x) => x.id !== ord.id)
           : orders.map((x) => x.id === ord.id ? { ...x, size: newOrdSize } : x);
       }
@@ -408,13 +408,13 @@ export function MarketDetail({ market, user, onUpdate, onBack, onNotify }) {
         history = [...history, { ts: now + fillIdx, yes: vwap }];
       }
 
-      if (remaining > 0.005) orders = [...orders, { ...o, size: remaining }];
+      if (remaining > FILL_EPSILON) orders = [...orders, { ...o, size: remaining }];
     }
 
     onUpdate({ ...market, orders, priceHistory: history, trades });
 
     // Fire single notification event — server applies priority dedup per user
-    const filledSize = parseFloat((o.size - (remaining > 0.005 ? remaining : 0)).toFixed(2));
+    const filledSize = parseFloat((o.size - (remaining > FILL_EPSILON ? remaining : 0)).toFixed(2));
     const displayPrice = o.displaySide === "no" ? 100 - o.price : o.price;
     const participantUserIds = [...new Set([market.creator, ...market.orders.map((x) => x.userId)].filter(Boolean))];
     onNotify?.("order_confirmed", {
@@ -427,8 +427,8 @@ export function MarketDetail({ market, user, onUpdate, onBack, onNotify }) {
 
     // Build receipt
     const isNo       = pendingOrder.displaySide === "no";
-    const filledNow  = pendingOrder.size - (remaining > 0.005 ? remaining : 0);
-    const restingNow = remaining > 0.005 ? remaining : 0;
+    const filledNow  = pendingOrder.size - (remaining > FILL_EPSILON ? remaining : 0);
+    const restingNow = remaining > FILL_EPSILON ? remaining : 0;
     setOrderReceipt({
       outcomeLabel: isNo ? "NO" : "YES",
       isNo,
@@ -594,7 +594,7 @@ export function MarketDetail({ market, user, onUpdate, onBack, onNotify }) {
           .filter((t) => t.seller === user.name)
           .reduce((s, t) => s + ((100 - t.price) / 100) * t.size, 0);
 
-        const hasPosition = yesContracts > 0.005 || noContracts > 0.005 || myOrders.length > 0;
+        const hasPosition = yesContracts > FILL_EPSILON || noContracts > FILL_EPSILON || myOrders.length > 0;
         if (!hasPosition) return null;
 
         const yesValue = (mid / 100) * yesContracts;
@@ -604,7 +604,7 @@ export function MarketDetail({ market, user, onUpdate, onBack, onNotify }) {
           <div style={{ margin: "10px 14px 0", background: C.raised, border: `1px solid ${C.borderBright}`, borderRadius: 10, padding: "12px 14px" }}>
             <div style={{ color: C.muted, fontSize: 10, letterSpacing: 1.2, textTransform: "uppercase", marginBottom: 10 }}>Your Position</div>
 
-            {yesContracts > 0.005 && (
+            {yesContracts > FILL_EPSILON && (
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                   <span style={{ background: C.yesDim, color: C.yes, border: `1px solid ${C.yes}44`, borderRadius: 5, padding: "2px 8px", fontSize: 11, fontWeight: 700 }}>YES</span>
@@ -618,7 +618,7 @@ export function MarketDetail({ market, user, onUpdate, onBack, onNotify }) {
               </div>
             )}
 
-            {noContracts > 0.005 && (
+            {noContracts > FILL_EPSILON && (
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                   <span style={{ background: C.noDim, color: C.no, border: `1px solid ${C.no}44`, borderRadius: 5, padding: "2px 8px", fontSize: 11, fontWeight: 700 }}>NO</span>

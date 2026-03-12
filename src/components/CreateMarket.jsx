@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { supabase } from "../lib/supabase.js";
 import { C, mono, inputStyle, labelStyle } from "../lib/constants.js";
-import { cents, pct, uid, parseNum, generatePriceHistory } from "../lib/helpers.js";
+import { cents, pct, uid, parseNum, generatePriceHistory, FILL_EPSILON } from "../lib/helpers.js";
 
 /* ─── HIDE USERS MODAL ───────────────────────────────────────────── */
 function HideUsersModal({ currentUserId, hiddenFrom, onChange, onClose }) {
@@ -105,10 +105,10 @@ export function CreateMarket({ user, onAdd, onCancel }) {
       creator: user.id, creatorName: user.name, status: "open", resolvedAs: null, resolvedNote: null,
       createdAt: now,
       hiddenFrom,
-      priceHistory: generatePriceHistory(mid, 5, now),
+      priceHistory: generatePriceHistory(mid, 5),
       orders: [
-        { id: uid(), side: "buy",  price: bid,  size: parseFloat(s.toFixed(2)), userId: user.id, name: user.name },
-        { id: uid(), side: "sell", price: ask, size: parseFloat(s.toFixed(2)), userId: user.id, name: user.name },
+        { id: uid(), side: "buy",  price: bid,  size: Math.round(s * 100) / 100, userId: user.id, name: user.name },
+        { id: uid(), side: "sell", price: ask, size: Math.round(s * 100) / 100, userId: user.id, name: user.name },
       ],
       trades: [],
     });
@@ -187,9 +187,9 @@ export function CreateMarket({ user, onAdd, onCancel }) {
           />
         </div>
         <div style={{ display: "flex", justifyContent: "space-between", fontSize: 10, color: C.muted, marginBottom: 4 }}>
-          <span>1¢</span>
+          <span>6¢</span>
           <span>50¢</span>
-          <span>99¢</span>
+          <span>94¢</span>
         </div>
 
         {/* Size input */}
@@ -206,7 +206,7 @@ export function CreateMarket({ user, onAdd, onCancel }) {
             onChange={(e) => setSize(e.target.value)}
           />
           <p style={{ color: C.muted, fontSize: 11, marginTop: -4 }}>
-            You post ${parseNum(size) >= 5 ? parseFloat(parseNum(size).toFixed(2)) : "—"} on Buy YES @ {cents(bid)} and ${parseNum(size) >= 5 ? parseFloat(parseNum(size).toFixed(2)) : "—"} on Sell YES @ {cents(ask)}. Settlement off-platform. 🤝
+            You post ${parseNum(size) >= 5 ? Math.round(parseNum(size) * 100) / 100 : "—"} on Buy YES @ {cents(bid)} and ${parseNum(size) >= 5 ? Math.round(parseNum(size) * 100) / 100 : "—"} on Sell YES @ {cents(ask)}. Settlement off-platform. 🤝
           </p>
         </div>
       </div>

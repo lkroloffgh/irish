@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { C, mono } from "../lib/constants.js";
+import { FILL_EPSILON } from "../lib/helpers.js";
 
 /* ─── DEBT COMPUTATION ───────────────────────────────────────────── */
 /*
@@ -52,7 +53,7 @@ function computeDebts(markets) {
       const ab = raw[debtor]?.[creditor] || 0;
       const ba = raw[creditor]?.[debtor]  || 0;
       const net = ab - ba;
-      if (Math.abs(net) < 0.005) continue;
+      if (Math.abs(net) < FILL_EPSILON) continue;
       debts.push({
         id: key,
         debtor: net > 0 ? debtor : creditor,
