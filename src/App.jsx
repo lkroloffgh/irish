@@ -179,13 +179,15 @@ export default function App() {
   const sendNotif = async (event, payload) => {
     try {
       const headers = await getAuthHeader();
-      if (!headers.Authorization) return;
-      await fetch(`${ADMIN_API}/push/send`, {
+      if (!headers.Authorization) { console.log("[notif] no auth header"); return; }
+      const res = await fetch(`${ADMIN_API}/push/send`, {
         method: "POST",
         headers: { ...headers, "Content-Type": "application/json" },
         body: JSON.stringify({ event, payload }),
       });
-    } catch {}
+      const data = await res.json();
+      console.log("[notif]", event, res.status, data);
+    } catch (e) { console.error("[notif] error", e); }
   };
 
   const loadNotifPrefs = async () => {
@@ -200,25 +202,31 @@ export default function App() {
   };
 
   const initNotifications = async () => {
-    if (!("serviceWorker" in navigator) || !("PushManager" in window)) return;
+    if (!("serviceWorker" in navigator) || !("PushManager" in window)) { console.log("[notif] push not supported"); return; }
     const permission = await Notification.requestPermission();
+    console.log("[notif] permission:", permission);
     setNotifStatus(permission);
     if (permission !== "granted") return;
     const reg = await navigator.serviceWorker.register("/sw.js");
+    console.log("[notif] sw registered:", reg);
     await navigator.serviceWorker.ready;
     let sub = await reg.pushManager.getSubscription();
+    console.log("[notif] existing sub:", sub);
     if (!sub) {
       sub = await reg.pushManager.subscribe({
         userVisibleOnly: true,
         applicationServerKey: urlBase64ToUint8Array(import.meta.env.VITE_VAPID_PUBLIC_KEY),
       });
+      console.log("[notif] new sub:", sub);
     }
     const headers = await getAuthHeader();
-    await fetch(`${ADMIN_API}/push/subscribe`, {
+    const res = await fetch(`${ADMIN_API}/push/subscribe`, {
       method: "POST",
       headers: { ...headers, "Content-Type": "application/json" },
       body: JSON.stringify({ subscription: sub.toJSON() }),
     });
+    const data = await res.json();
+    console.log("[notif] subscribe result:", res.status, data);
   };
 
   // ── Load all markets from Supabase ──
@@ -267,6 +275,10 @@ export default function App() {
     if (!session) return;
     loadMarkets();
     loadNotifPrefs();
+    // Re-register push subscription on every load if permission already granted
+    if (typeof Notification !== "undefined" && Notification.permission === "granted") {
+      initNotifications();
+    }
 
     // Real-time subscriptions — reload on any change
     const channel = supabase
@@ -2132,7 +2144,17 @@ const PREF_LABELS = {
 };
 
 function NotificationSettings({ notifStatus, notifPrefs, onInitNotifications, onPrefsChange, getAuthHeader }) {
-  const [saving, setSaving] = useState(false);
+  const [saving, setSaving]         = useState(false);
+  const [installPrompt, setInstallPrompt] = useState(null);
+
+  const isIOS        = /iPhone|iPad|iPod/.test(navigator.userAgent);
+  const isStandalone = window.navigator.standalone === true || window.matchMedia("(display-mode: standalone)").matches;
+
+  useEffect(() => {
+    const handler = (e) => { e.preventDefault(); setInstallPrompt(e); };
+    window.addEventListener("beforeinstallprompt", handler);
+    return () => window.removeEventListener("beforeinstallprompt", handler);
+  }, []);
 
   const isSupported = typeof window !== "undefined" && "serviceWorker" in navigator && "PushManager" in window;
   const isGranted   = notifStatus === "granted";
@@ -2159,6 +2181,35 @@ function NotificationSettings({ notifStatus, notifPrefs, onInitNotifications, on
       <div style={{ color: C.muted, fontSize: 10, letterSpacing: 1.5, textTransform: "uppercase", paddingBottom: 12, borderBottom: `1px solid ${C.border}`, marginBottom: 20 }}>
         Notifications
       </div>
+
+      {/* iOS: show install instructions if not already installed */}
+      {isIOS && !isStandalone && (
+        <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 10, padding: 16, marginBottom: 20 }}>
+          <p style={{ color: C.text, fontSize: 13, fontWeight: 700, margin: "0 0 6px" }}>Install on your iPhone</p>
+          <p style={{ color: C.muted, fontSize: 12, lineHeight: 1.7, margin: "0 0 10px" }}>
+            Push notifications on iOS require the app to be installed. Open in Safari, then:
+          </p>
+          <div style={{ color: C.muted, fontSize: 12, lineHeight: 2 }}>
+            <div>1. Tap the <strong style={{ color: C.text }}>Share</strong> button <span style={{ fontSize: 14 }}>⎋</span> at the bottom</div>
+            <div>2. Tap <strong style={{ color: C.text }}>"Add to Home Screen"</strong></div>
+            <div>3. Open the app from your home screen</div>
+          </div>
+        </div>
+      )}
+
+      {/* Chrome/Android/Desktop: native install prompt */}
+      {!isIOS && !isStandalone && installPrompt && (
+        <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 10, padding: 16, marginBottom: 20, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <div>
+            <p style={{ color: C.text, fontSize: 13, fontWeight: 700, margin: "0 0 2px" }}>Install app</p>
+            <p style={{ color: C.muted, fontSize: 12, margin: 0 }}>Get notifications even when the tab is closed</p>
+          </div>
+          <button onClick={() => { installPrompt.prompt(); setInstallPrompt(null); }}
+            style={{ background: C.gold, color: "#000", border: "none", borderRadius: 7, padding: "8px 14px", fontWeight: 800, fontSize: 12, cursor: "pointer", fontFamily: mono, flexShrink: 0, marginLeft: 12 }}>
+            Install
+          </button>
+        </div>
+      )}
 
       {!isSupported && (
         <div style={{ background: C.dim, border: `1px solid ${C.border}`, borderRadius: 8, padding: "12px 14px", fontSize: 12, color: C.muted }}>
