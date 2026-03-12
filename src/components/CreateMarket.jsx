@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { supabase } from "../lib/supabase.js";
 import { C, mono, inputStyle, labelStyle } from "../lib/constants.js";
-import { cents, pct, uid, parseNum, generatePriceHistory } from "../lib/helpers.js";
+import { cents, pct, uid, parseNum, generatePriceHistory, FILL_EPSILON } from "../lib/helpers.js";
 
 /* ─── HIDE USERS MODAL ───────────────────────────────────────────── */
 function HideUsersModal({ currentUserId, hiddenFrom, onChange, onClose }) {
@@ -75,15 +75,18 @@ export function CreateMarket({ user, onAdd, onCancel }) {
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [resolution, setResolution] = useState("");
-  // mid is the midpoint (5–95). bid = mid-5, ask = mid+5 → always exactly 10¢ spread
+  // mid is the midpoint (6–94). bid = mid-5, ask = mid+5 → always a fixed 10¢ spread.
+  // The slider's visual range is 1–99, but the value is hard-clamped to 6–94 so that
+  // bid never goes below 1¢ and ask never goes above 99¢. At the limits, the gold band
+  // edges align with the visual track ends while the thumb stays centered in the band.
   const [mid, setMid] = useState(50);
   const [size, setSize] = useState("5");
   const [err, setErr] = useState("");
   const [hiddenFrom, setHiddenFrom] = useState([]);
   const [showHideModal, setShowHideModal] = useState(false);
 
-  const bid = mid - 5;   // Buy YES price
-  const ask = mid + 5;   // Sell YES price
+  const bid = mid - 5;  // Buy YES price
+  const ask = mid + 5;  // Sell YES price
 
   const handleMidChange = (e) => {
     const v = Math.max(6, Math.min(94, Number(e.target.value)));
@@ -105,18 +108,33 @@ export function CreateMarket({ user, onAdd, onCancel }) {
       creator: user.id, creatorName: user.name, status: "open", resolvedAs: null, resolvedNote: null,
       createdAt: now,
       hiddenFrom,
-      priceHistory: generatePriceHistory(mid, 5, now),
+      priceHistory: generatePriceHistory(mid, 5),
       orders: [
-        { id: uid(), side: "buy",  price: bid,  size: parseFloat(s.toFixed(2)), userId: user.id, name: user.name },
-        { id: uid(), side: "sell", price: ask, size: parseFloat(s.toFixed(2)), userId: user.id, name: user.name },
+        { id: uid(), side: "buy",  price: bid,  size: Math.round(s * 100) / 100, userId: user.id, name: user.name },
+        { id: uid(), side: "sell", price: ask, size: Math.round(s * 100) / 100, userId: user.id, name: user.name },
       ],
       trades: [],
     });
   };
 
-  // Slider range is 6–94 (span of 88). Convert a value to % position on track.
-  const tp = (v) => `${((v - 6) / 88) * 100}%`;
-  // Green up to bid, gold band bid→ask (the spread), red from ask onward
+  // Two coordinate systems:
+  //
+  // tp(v) — gradient stops on the custom track div.
+  //   The track div is inset 9px each side, spanning exactly the thumb travel range
+  //   [thumbCenter_min, thumbCenter_max]. Inside that div, simple % is correct:
+  //   tp(1)=0%, tp(99)=100% → no green/red strip at the hard stops, perfect alignment.
+  //
+  // tpLabel(v) — floating labels in the full-width outer container.
+  //   Labels need the compensated formula so they sit over the actual thumb positions.
+  //   calc(frac*(100%-18px)+9px) maps value→browser thumb center in the outer container.
+  const tp      = (v) => `${((v - 1) / 98 * 100).toFixed(3)}%`;
+  const tpLabel = (v) => {
+    const frac = (v - 1) / 98;
+    return `clamp(8px, calc(${(frac * 100).toFixed(3)}% - ${(frac * 18 - 9).toFixed(3)}px), calc(100% - 8px))`;
+  };
+  // Green up to bid, gold band bid→ask, red from ask onward.
+  // Track has square ends (no border-radius) so there is no rounded cap to pop in/out
+  // as the gold band approaches the edge.
   const sliderTrack = `linear-gradient(to right, ${C.yes} 0%, ${C.yes} ${tp(bid)}, ${C.gold} ${tp(bid)}, ${C.gold} ${tp(ask)}, ${C.no} ${tp(ask)}, ${C.no} 100%)`;
 
   return (
@@ -168,19 +186,35 @@ export function CreateMarket({ user, onAdd, onCancel }) {
         </div>
 
         {/* Slider */}
-        <div style={{ position: "relative", marginBottom: 6 }}>
+        <div style={{ position: "relative", marginBottom: 6, paddingTop: 26 }}>
+          {/* Floating bid label — tracks the buy YES price */}
+          <div style={{ position: "absolute", top: 0, left: tpLabel(bid), transform: "translateX(-50%)", textAlign: "center", pointerEvents: "none", lineHeight: 1.2 }}>
+            <div style={{ fontSize: 12, fontWeight: 700, color: C.yes, fontFamily: mono }}>{cents(bid)}</div>
+            <div style={{ fontSize: 8, color: C.yes, marginTop: 1 }}>▼</div>
+          </div>
+          {/* Floating ask label — tracks the sell YES price */}
+          <div style={{ position: "absolute", top: 0, left: tpLabel(ask), transform: "translateX(-50%)", textAlign: "center", pointerEvents: "none", lineHeight: 1.2 }}>
+            <div style={{ fontSize: 12, fontWeight: 700, color: C.no, fontFamily: mono }}>{cents(ask)}</div>
+            <div style={{ fontSize: 8, color: C.no, marginTop: 1 }}>▼</div>
+          </div>
+          {/* Custom track — inset 9px each side = exact thumb travel range.
+              Simple % gradient aligns perfectly here; input bg is transparent. */}
+          <div style={{
+            position: "absolute", bottom: 0, left: 9, right: 9, height: 6,
+            background: sliderTrack, pointerEvents: "none",
+          }} />
           <input
             type="range"
-            min="6" max="94" step="1"
+            min="1" max="99" step="1"
             value={mid}
             onChange={handleMidChange}
             style={{
+              display: "block",
               width: "100%",
               appearance: "none",
               WebkitAppearance: "none",
               height: 6,
-              borderRadius: 3,
-              background: sliderTrack,
+              background: "transparent",
               outline: "none",
               cursor: "pointer",
             }}
@@ -188,7 +222,6 @@ export function CreateMarket({ user, onAdd, onCancel }) {
         </div>
         <div style={{ display: "flex", justifyContent: "space-between", fontSize: 10, color: C.muted, marginBottom: 4 }}>
           <span>1¢</span>
-          <span>50¢</span>
           <span>99¢</span>
         </div>
 
@@ -206,7 +239,7 @@ export function CreateMarket({ user, onAdd, onCancel }) {
             onChange={(e) => setSize(e.target.value)}
           />
           <p style={{ color: C.muted, fontSize: 11, marginTop: -4 }}>
-            You post ${parseNum(size) >= 5 ? parseFloat(parseNum(size).toFixed(2)) : "—"} on Buy YES @ {cents(bid)} and ${parseNum(size) >= 5 ? parseFloat(parseNum(size).toFixed(2)) : "—"} on Sell YES @ {cents(ask)}. Settlement off-platform. 🤝
+            You post ${parseNum(size) >= 5 ? Math.round(parseNum(size) * 100) / 100 : "—"} on Buy YES @ {cents(bid)} and ${parseNum(size) >= 5 ? Math.round(parseNum(size) * 100) / 100 : "—"} on Sell YES @ {cents(ask)}. Settlement off-platform. 🤝
           </p>
         </div>
       </div>
@@ -234,19 +267,21 @@ export function CreateMarket({ user, onAdd, onCancel }) {
       </button>
 
       <style>{`
+        input[type=range]::-webkit-slider-runnable-track { background: transparent; }
+        input[type=range]::-moz-range-track               { background: transparent; }
         input[type=range]::-webkit-slider-thumb {
           -webkit-appearance: none;
           width: 18px; height: 18px;
           border-radius: 50%;
           background: ${C.gold};
-          border: 2px solid #000;
+          border: 2px solid rgba(255,255,255,0.35);
           cursor: pointer;
         }
         input[type=range]::-moz-range-thumb {
           width: 18px; height: 18px;
           border-radius: 50%;
           background: ${C.gold};
-          border: 2px solid #000;
+          border: 2px solid rgba(255,255,255,0.35);
           cursor: pointer;
         }
       `}</style>
