@@ -168,7 +168,17 @@ export function CreateMarket({ user, onAdd, onCancel }) {
         </div>
 
         {/* Slider */}
-        <div style={{ position: "relative", marginBottom: 6 }}>
+        <div style={{ position: "relative", marginBottom: 6, paddingTop: 26 }}>
+          {/* Floating bid label — tracks the buy YES price */}
+          <div style={{ position: "absolute", top: 0, left: tp(bid), transform: "translateX(-50%)", textAlign: "center", pointerEvents: "none", lineHeight: 1.2 }}>
+            <div style={{ fontSize: 12, fontWeight: 700, color: C.yes, fontFamily: mono }}>{cents(bid)}</div>
+            <div style={{ fontSize: 8, color: C.yes, marginTop: 1 }}>▼</div>
+          </div>
+          {/* Floating ask label — tracks the sell YES price */}
+          <div style={{ position: "absolute", top: 0, left: tp(ask), transform: "translateX(-50%)", textAlign: "center", pointerEvents: "none", lineHeight: 1.2 }}>
+            <div style={{ fontSize: 12, fontWeight: 700, color: C.no, fontFamily: mono }}>{cents(ask)}</div>
+            <div style={{ fontSize: 8, color: C.no, marginTop: 1 }}>▼</div>
+          </div>
           <input
             type="range"
             min="6" max="94" step="1"
@@ -187,9 +197,8 @@ export function CreateMarket({ user, onAdd, onCancel }) {
           />
         </div>
         <div style={{ display: "flex", justifyContent: "space-between", fontSize: 10, color: C.muted, marginBottom: 4 }}>
-          <span>6¢</span>
-          <span>50¢</span>
-          <span>94¢</span>
+          <span>1¢</span>
+          <span>99¢</span>
         </div>
 
         {/* Size input */}
