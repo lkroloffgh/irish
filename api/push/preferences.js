@@ -1,15 +1,9 @@
-import { createClient } from "@supabase/supabase-js";
-
-const SUPABASE_URL = process.env.VITE_SUPABASE_URL;
-const SERVICE_KEY  = process.env.SUPABASE_SERVICE_ROLE;
+import { verifyUser } from "../_utils.js";
 
 export default async function handler(req, res) {
-  const token = req.headers.authorization?.split(" ")[1];
-  if (!token) return res.status(401).json({ error: "Unauthorized" });
-
-  const admin = createClient(SUPABASE_URL, SERVICE_KEY);
-  const { data: { user }, error: authErr } = await admin.auth.getUser(token);
-  if (authErr || !user) return res.status(401).json({ error: "Unauthorized" });
+  const result = await verifyUser(req);
+  if (!result) return res.status(401).json({ error: "Unauthorized" });
+  const { user, admin } = result;
 
   if (req.method === "GET") {
     const { data, error } = await admin

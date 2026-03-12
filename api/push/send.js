@@ -1,8 +1,6 @@
-import { createClient } from "@supabase/supabase-js";
+import { verifyUser } from "../_utils.js";
 import webpush from "web-push";
 
-const SUPABASE_URL  = process.env.VITE_SUPABASE_URL;
-const SERVICE_KEY   = process.env.SUPABASE_SERVICE_ROLE;
 const VAPID_PUBLIC  = process.env.VAPID_PUBLIC_KEY;
 const VAPID_PRIVATE = process.env.VAPID_PRIVATE_KEY;
 const VAPID_SUBJECT = process.env.VAPID_SUBJECT || "mailto:admin@willdoug.irish";
@@ -29,12 +27,9 @@ async function getPrefs(admin, cols) {
 export default async function handler(req, res) {
   if (req.method !== "POST") return res.status(405).json({ error: "Method not allowed" });
 
-  const token = req.headers.authorization?.split(" ")[1];
-  if (!token) return res.status(401).json({ error: "Unauthorized" });
-
-  const admin = createClient(SUPABASE_URL, SERVICE_KEY);
-  const { data: { user }, error: authErr } = await admin.auth.getUser(token);
-  if (authErr || !user) return res.status(401).json({ error: "Unauthorized" });
+  const result = await verifyUser(req);
+  if (!result) return res.status(401).json({ error: "Unauthorized" });
+  const { user, admin } = result;
 
   const { event, payload } = req.body;
   if (!event || !payload) return res.status(400).json({ error: "event and payload required" });
