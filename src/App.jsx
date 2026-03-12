@@ -43,10 +43,15 @@ export default function App() {
       setSession(session);
       if (session) {
         fetchProfile(session.user.id);
-        // Detect new signup: created_at ≈ last_sign_in_at (within 10s)
+        // Detect new signup: created_at ≈ last_sign_in_at (within 10s).
+        // Guard with localStorage so the notification fires at most once per user,
+        // even if onAuthStateChange fires SIGNED_IN multiple times (token refresh,
+        // page reload within the window, email-confirm redirect, etc.).
         if (event === "SIGNED_IN" && session.user.created_at && session.user.last_sign_in_at) {
           const diff = Math.abs(new Date(session.user.last_sign_in_at) - new Date(session.user.created_at));
-          if (diff < 10000) {
+          const key = `signup_notif_sent_${session.user.id}`;
+          if (diff < 10000 && !localStorage.getItem(key)) {
+            localStorage.setItem(key, "1");
             setTimeout(() => sendNotif("new_signup", { userName: session.user.user_metadata?.display_name || "Someone", excludeUserIds: [session.user.id] }), 3000);
           }
         }
