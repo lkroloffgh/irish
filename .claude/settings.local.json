@@ -1,0 +1,18 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git commit:*)",
+      "Bash(git push -u origin main)",
+      "Bash(git remote set-url origin git@github.com:lkroloffgh/irish.git)",
+      "Bash(ssh-keygen -t ed25519 -C \"lkroloffgh@github\" -f ~/.ssh/id_ed25519 -N \"\")",
+      "Bash(ssh-keyscan github.com)",
+      "Bash(~/.ssh/known_hosts)",
+      "Bash(pip3 install git-filter-repo)",
+      "Bash(git remote add origin git@github.com:lkroloffgh/irish.git)",
+      "Bash(git push --force origin main)",
+      "Bash(git checkout -b hideusers)",
+      "Bash(git checkout main)",
+      "Bash(git pull origin main)"
+    ]
+  }
+}
