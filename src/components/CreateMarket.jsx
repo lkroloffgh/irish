@@ -132,11 +132,9 @@ export function CreateMarket({ user, onAdd, onCancel }) {
     return `clamp(8px, ${inner}, calc(100% - 8px))`;
   };
   // Green up to bid, gold band bid→ask, red from ask onward.
-  // At the hard stops, camouflage the green/red by matching C.surface so the gold band
-  // never changes width — no growth at the edge — while the limit still feels like a wall.
-  const greenColor = bid <= 1  ? C.surface : C.yes;
-  const redColor   = ask >= 99 ? C.surface : C.no;
-  const sliderTrack = `linear-gradient(to right, ${greenColor} 0%, ${greenColor} ${tp(bid)}, ${C.gold} ${tp(bid)}, ${C.gold} ${tp(ask)}, ${redColor} ${tp(ask)}, ${redColor} 100%)`;
+  // Track has square ends (no border-radius) so there is no rounded cap to pop in/out
+  // as the gold band approaches the edge.
+  const sliderTrack = `linear-gradient(to right, ${C.yes} 0%, ${C.yes} ${tp(bid)}, ${C.gold} ${tp(bid)}, ${C.gold} ${tp(ask)}, ${C.no} ${tp(ask)}, ${C.no} 100%)`;
 
   return (
     <div style={{ padding: 16 }}>
@@ -208,7 +206,7 @@ export function CreateMarket({ user, onAdd, onCancel }) {
               appearance: "none",
               WebkitAppearance: "none",
               height: 6,
-              borderRadius: 3,
+              borderRadius: 0,
               background: sliderTrack,
               outline: "none",
               cursor: "pointer",
