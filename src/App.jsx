@@ -117,6 +117,7 @@ export default function App() {
   const [marketsLoading, setMarketsLoading] = useState(true);
   const [view, setView]         = useState("feed");
   const [selectedId, setSelectedId] = useState(null);
+  useEffect(() => { window.scrollTo(0, 0); }, [view]);
   const [settled, setSettled]   = useState(new Set());
   const [isResetFlow, setIsResetFlow] = useState(false);
 
