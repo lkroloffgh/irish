@@ -134,7 +134,11 @@ export function CreateMarket({ user, onAdd, onCancel }) {
   // Green up to bid, gold band bid→ask (the spread), red from ask onward.
   // Slider range is 1–99 so bid=1 and ask=99 align with the visual track ends.
   // Value is clamped to 6–94 so the thumb always stays centered in the gold band.
-  const sliderTrack = `linear-gradient(to right, ${C.yes} 0%, ${C.yes} ${tp(bid)}, ${C.gold} ${tp(bid)}, ${C.gold} ${tp(ask)}, ${C.no} ${tp(ask)}, ${C.no} 100%)`;
+  // At the hard stops, snap gradient edges to 0%/100% so no green/red sliver remains —
+  // hitting the limit feels like a bumper hitting a wall, not like there's room left.
+  const bidGrad = bid <= 1  ? "0%"   : tp(bid);
+  const askGrad = ask >= 99 ? "100%" : tp(ask);
+  const sliderTrack = `linear-gradient(to right, ${C.yes} 0%, ${C.yes} ${bidGrad}, ${C.gold} ${bidGrad}, ${C.gold} ${askGrad}, ${C.no} ${askGrad}, ${C.no} 100%)`;
 
   return (
     <div style={{ padding: 16 }}>
