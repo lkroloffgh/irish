@@ -16,8 +16,8 @@ export function computeMid(orders = []) {
   const bestBid = buys[0]?.price;
   const bestAsk = sells[0]?.price;
   if (bestBid !== undefined && bestAsk !== undefined) return Math.round((bestBid + bestAsk) / 2);
-  if (bestBid !== undefined) return bestBid;
-  if (bestAsk !== undefined) return bestAsk;
+  if (bestBid !== undefined) return Math.round((bestBid + 100) / 2); // implied ask = 100
+  if (bestAsk !== undefined) return Math.round(bestAsk / 2);         // implied bid = 0
   return 50;
 }
 
