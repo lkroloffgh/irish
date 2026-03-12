@@ -274,14 +274,14 @@ export function CreateMarket({ user, onAdd, onCancel }) {
           width: 18px; height: 18px;
           border-radius: 50%;
           background: ${C.gold};
-          border: 2px solid #000;
+          border: 2px solid rgba(255,255,255,0.35);
           cursor: pointer;
         }
         input[type=range]::-moz-range-thumb {
           width: 18px; height: 18px;
           border-radius: 50%;
           background: ${C.gold};
-          border: 2px solid #000;
+          border: 2px solid rgba(255,255,255,0.35);
           cursor: pointer;
         }
       `}</style>
