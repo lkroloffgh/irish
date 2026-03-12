@@ -131,7 +131,7 @@ export default async function handler(req, res) {
     const msg = toSend.get(user_id);
     if (!msg) return;
     try {
-      await webpush.sendNotification(subscription, JSON.stringify(msg));
+      await webpush.sendNotification(subscription, JSON.stringify(msg), { TTL: 43200 });
       sent++;
     } catch (err) {
       if (err.statusCode === 410 || err.statusCode === 404) staleIds.push(user_id);
