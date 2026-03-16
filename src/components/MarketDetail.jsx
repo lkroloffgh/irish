@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, ReferenceLine } from "recharts";
 import { C, mono, inputStyle, labelStyle } from "../lib/constants.js";
 import { cents, pct, uid, parseNum, fmtChartTs, fmtTooltipTs, computeMid, FILL_EPSILON } from "../lib/helpers.js";
@@ -297,6 +297,7 @@ function QuickBuyModal({ side, price, user, onReview, onCancel }) {
 export function MarketDetail({ market, user, onUpdate, onBack, onNotify }) {
   const [tab, setTab] = useState("chart");
   const [orderSide, setOrderSide] = useState("buy");
+  const orderFormRef = useRef(null);
   const [orderPrice, setOrderPrice] = useState("");
   const [orderSize, setOrderSize] = useState("");
   const [orderErr, setOrderErr] = useState("");
@@ -345,7 +346,7 @@ export function MarketDetail({ market, user, onUpdate, onBack, onNotify }) {
     if (o.side === "buy") {
       const matches = orders
         .map((ord, i) => ({ ord, i }))
-        .filter(({ ord }) => ord.side === "sell" && ord.price <= o.price)
+        .filter(({ ord }) => ord.side === "sell" && ord.price <= o.price && ord.userId !== o.userId)
         .sort((a, b) => a.ord.price - b.ord.price);
 
       let totalFilledSize = 0;
@@ -380,7 +381,7 @@ export function MarketDetail({ market, user, onUpdate, onBack, onNotify }) {
     } else {
       const matches = orders
         .map((ord, i) => ({ ord, i }))
-        .filter(({ ord }) => ord.side === "buy" && ord.price >= o.price)
+        .filter(({ ord }) => ord.side === "buy" && ord.price >= o.price && ord.userId !== o.userId)
         .sort((a, b) => b.ord.price - a.ord.price);
 
       let totalFilledSize = 0;
@@ -559,7 +560,7 @@ export function MarketDetail({ market, user, onUpdate, onBack, onNotify }) {
                 </button>
               ) : (
                 <button
-                  onClick={() => { setTab("book"); setOrderSide("buy"); }}
+                  onClick={() => { setTab("book"); setOrderSide("buy"); (() => { const el = orderFormRef.current; if (el) window.scrollTo({ top: el.getBoundingClientRect().top + window.scrollY - 100, behavior: "smooth" }); })(); }}
                   style={{ flex: 1, background: "transparent", color: C.yes, border: `1px solid ${C.yes}33`, borderRadius: 7, padding: "10px 0", fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: mono }}>
                   BID YES →
                 </button>
@@ -572,9 +573,9 @@ export function MarketDetail({ market, user, onUpdate, onBack, onNotify }) {
                 </button>
               ) : (
                 <button
-                  onClick={() => { setTab("book"); setOrderSide("sell"); }}
+                  onClick={() => { setTab("book"); setOrderSide("sell"); (() => { const el = orderFormRef.current; if (el) window.scrollTo({ top: el.getBoundingClientRect().top + window.scrollY - 100, behavior: "smooth" }); })(); }}
                   style={{ flex: 1, background: "transparent", color: C.no, border: `1px solid ${C.no}33`, borderRadius: 7, padding: "10px 0", fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: mono }}>
-                  OFFER NO →
+                  BID NO →
                 </button>
               )}
             </div>
@@ -724,7 +725,7 @@ export function MarketDetail({ market, user, onUpdate, onBack, onNotify }) {
           {buys.length === 0 && <p style={{ color: C.muted, fontSize: 11, padding: "6px 0", opacity: 0.5 }}>No buy orders</p>}
 
           {/* ─── PLACE ORDER ─── */}
-          <div style={{ borderTop: `1px solid ${C.border}`, marginTop: 20, paddingTop: 18 }}>
+          <div ref={orderFormRef} style={{ borderTop: `1px solid ${C.border}`, marginTop: 20, paddingTop: 18 }}>
             <div style={{ color: C.muted, fontSize: 10, letterSpacing: 1.2, textTransform: "uppercase", marginBottom: 12 }}>Place Order</div>
 
             <div style={{ display: "flex", gap: 8, marginBottom: 14 }}>

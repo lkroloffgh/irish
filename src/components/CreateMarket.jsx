@@ -7,17 +7,23 @@ import { cents, pct, uid, parseNum, generatePriceHistory, FILL_EPSILON } from ".
 function HideUsersModal({ currentUserId, hiddenFrom, onChange, onClose }) {
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [fetchError, setFetchError] = useState(false);
 
-  useEffect(() => {
+  const loadUsers = () => {
+    setLoading(true);
+    setFetchError(false);
     supabase
       .from("profiles")
       .select("id, display_name")
       .neq("id", currentUserId)
-      .then(({ data }) => {
+      .then(({ data, error }) => {
+        if (error) { setFetchError(true); setLoading(false); return; }
         setUsers(data || []);
         setLoading(false);
       });
-  }, [currentUserId]);
+  };
+
+  useEffect(() => { loadUsers(); }, [currentUserId]);
 
   const toggle = (id) => {
     onChange(hiddenFrom.includes(id) ? hiddenFrom.filter((x) => x !== id) : [...hiddenFrom, id]);
@@ -27,15 +33,23 @@ function HideUsersModal({ currentUserId, hiddenFrom, onChange, onClose }) {
     <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.75)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000, padding: 16 }}>
       <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 12, width: "100%", maxWidth: 340, maxHeight: "70vh", display: "flex", flexDirection: "column" }}>
         {/* Fixed header */}
-        <div style={{ padding: "14px 16px 10px", borderBottom: `1px solid ${C.border}` }}>
-          <h3 style={{ color: C.gold, fontFamily: mono, fontSize: 13, fontWeight: 800, margin: 0 }}>🙈 Hide from users</h3>
-          <p style={{ color: C.muted, fontSize: 10, margin: "3px 0 0" }}>Selected users won't see this market.</p>
+        <div style={{ padding: "14px 16px 10px", borderBottom: `1px solid ${C.border}`, display: "flex", alignItems: "flex-start", justifyContent: "space-between" }}>
+          <div>
+            <h3 style={{ color: C.gold, fontFamily: mono, fontSize: 13, fontWeight: 800, margin: 0 }}>🙈 Hide from users</h3>
+            <p style={{ color: C.muted, fontSize: 10, margin: "3px 0 0" }}>Selected users won't see this market.</p>
+          </div>
+          <button onClick={onClose} style={{ background: "transparent", border: "none", color: C.muted, fontSize: 16, cursor: "pointer", lineHeight: 1, padding: "0 0 0 8px" }}>✕</button>
         </div>
 
         {/* Scrollable list */}
         <div style={{ overflowY: "auto", flex: 1, padding: "8px 12px" }}>
           {loading ? (
             <p style={{ color: C.muted, fontSize: 12, padding: "8px 0" }}>Loading users…</p>
+          ) : fetchError ? (
+            <div style={{ padding: "8px 0" }}>
+              <p style={{ color: C.no, fontSize: 12, marginBottom: 8 }}>Couldn't load users.</p>
+              <button onClick={loadUsers} style={{ background: "transparent", border: `1px solid ${C.border}`, color: C.muted, borderRadius: 6, padding: "5px 10px", fontSize: 11, cursor: "pointer", fontFamily: mono }}>Retry</button>
+            </div>
           ) : users.length === 0 ? (
             <p style={{ color: C.muted, fontSize: 12, padding: "8px 0" }}>No other users found.</p>
           ) : (
@@ -82,6 +96,7 @@ export function CreateMarket({ user, onAdd, onCancel }) {
   const [mid, setMid] = useState(50);
   const [size, setSize] = useState("5");
   const [err, setErr] = useState("");
+  const [submitting, setSubmitting] = useState(false);
   const [hiddenFrom, setHiddenFrom] = useState([]);
   const [showHideModal, setShowHideModal] = useState(false);
 
@@ -93,7 +108,7 @@ export function CreateMarket({ user, onAdd, onCancel }) {
     setMid(v);
   };
 
-  const handleCreate = () => {
+  const handleCreate = async () => {
     if (!title.trim()) { setErr("Title required."); return; }
     if (!description.trim()) { setErr("Description required."); return; }
     if (!resolution.trim()) { setErr("Resolution criteria required."); return; }
@@ -101,20 +116,26 @@ export function CreateMarket({ user, onAdd, onCancel }) {
     if (isNaN(s) || s < 5) { setErr("Initial bet size must be at least $5 per side."); return; }
 
     setErr("");
+    setSubmitting(true);
     const now = Date.now();
-    onAdd({
-      id: uid(),
-      title, description, resolution,
-      creator: user.id, creatorName: user.name, status: "open", resolvedAs: null, resolvedNote: null,
-      createdAt: now,
-      hiddenFrom,
-      priceHistory: generatePriceHistory(mid, 5),
-      orders: [
-        { id: uid(), side: "buy",  price: bid,  size: Math.round(s * 100) / 100, userId: user.id, name: user.name },
-        { id: uid(), side: "sell", price: ask, size: Math.round(s * 100) / 100, userId: user.id, name: user.name },
-      ],
-      trades: [],
-    });
+    try {
+      await onAdd({
+        id: uid(),
+        title, description, resolution,
+        creator: user.id, creatorName: user.name, status: "open", resolvedAs: null, resolvedNote: null,
+        createdAt: now,
+        hiddenFrom,
+        priceHistory: generatePriceHistory(mid, 5),
+        orders: [
+          { id: uid(), side: "buy",  price: bid,  size: Math.round(s * 100) / 100, userId: user.id, name: user.name },
+          { id: uid(), side: "sell", price: ask, size: Math.round(s * 100) / 100, userId: user.id, name: user.name },
+        ],
+        trades: [],
+      });
+    } catch (e) {
+      setErr("Something went wrong creating the market. Please try again.");
+      setSubmitting(false);
+    }
   };
 
   // Two coordinate systems:
@@ -265,9 +286,10 @@ export function CreateMarket({ user, onAdd, onCancel }) {
 
       {err && <p style={{ color: C.no, fontSize: 12, marginBottom: 8 }}>{err}</p>}
       <button
-        style={{ width: "100%", background: C.gold, color: "#000", border: "none", borderRadius: 7, padding: "12px 0", fontWeight: 800, fontSize: 13, cursor: "pointer", fontFamily: mono }}
+        disabled={submitting}
+        style={{ width: "100%", background: C.gold, color: "#000", border: "none", borderRadius: 7, padding: "12px 0", fontWeight: 800, fontSize: 13, cursor: submitting ? "not-allowed" : "pointer", fontFamily: mono, opacity: submitting ? 0.6 : 1 }}
         onClick={handleCreate}>
-        Create Market ☘️
+        {submitting ? "Creating…" : "Create Market ☘️"}
       </button>
 
       <style>{`

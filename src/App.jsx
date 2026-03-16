@@ -60,7 +60,24 @@ export default function App() {
       }
     });
 
-    return () => subscription.unsubscribe();
+    // Re-validate session when the user returns to the tab/app (e.g. after phone sleep).
+    // Supabase's background token refresh can fail while the page is hidden; this ensures
+    // we pick up a refreshed session (or correctly clear state) when visibility resumes.
+    const handleVisibility = () => {
+      if (document.visibilityState === "visible") {
+        supabase.auth.getSession().then(({ data: { session } }) => {
+          setSession(session);
+          if (session) fetchProfile(session.user.id);
+          else setProfile(null);
+        });
+      }
+    };
+    document.addEventListener("visibilitychange", handleVisibility);
+
+    return () => {
+      subscription.unsubscribe();
+      document.removeEventListener("visibilitychange", handleVisibility);
+    };
   }, []);
 
   // ── Notification setup on login ──

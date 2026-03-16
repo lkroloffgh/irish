@@ -17,6 +17,7 @@ export default async function handler(req, res) {
   const { data, error } = await admin.auth.admin.generateLink({
     type: "recovery",
     email: (await admin.auth.admin.getUserById(userId)).data.user.email,
+    options: { redirectTo: "https://willdoug.irish" },
   });
   if (error) return res.status(500).json({ error: error.message });
 
