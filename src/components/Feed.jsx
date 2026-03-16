@@ -94,18 +94,14 @@ function MarketCard({ m, onOpen }) {
         ) : (
           <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
             {sells.length > 0 ? (
-              <button style={{ flex: 1, background: C.yesDim, color: C.yes, border: `1px solid ${C.yes}40`, borderRadius: 6, padding: "7px 0", fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: mono }}
-                onClick={(e) => e.stopPropagation()}>YES {cents(bestAsk)}</button>
+              <div style={{ flex: 1, background: C.yesDim, color: C.yes, border: `1px solid ${C.yes}40`, borderRadius: 6, padding: "7px 0", fontSize: 12, fontWeight: 700, textAlign: "center", fontFamily: mono }}>YES {cents(bestAsk)}</div>
             ) : (
-              <button style={{ flex: 1, background: "transparent", color: C.yes, border: `1px solid ${C.yes}33`, borderRadius: 6, padding: "7px 0", fontSize: 11, fontWeight: 700, cursor: "pointer", fontFamily: mono }}
-                onClick={(e) => e.stopPropagation()}>BID YES →</button>
+              <div style={{ flex: 1, background: "transparent", color: C.yes, border: `1px solid ${C.yes}33`, borderRadius: 6, padding: "7px 0", fontSize: 11, fontWeight: 700, textAlign: "center", fontFamily: mono }}>BID YES →</div>
             )}
             {buys.length > 0 ? (
-              <button style={{ flex: 1, background: C.noDim, color: C.no, border: `1px solid ${C.no}40`, borderRadius: 6, padding: "7px 0", fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: mono }}
-                onClick={(e) => e.stopPropagation()}>NO {cents(100 - bestBid)}</button>
+              <div style={{ flex: 1, background: C.noDim, color: C.no, border: `1px solid ${C.no}40`, borderRadius: 6, padding: "7px 0", fontSize: 12, fontWeight: 700, textAlign: "center", fontFamily: mono }}>NO {cents(100 - bestBid)}</div>
             ) : (
-              <button style={{ flex: 1, background: "transparent", color: C.no, border: `1px solid ${C.no}33`, borderRadius: 6, padding: "7px 0", fontSize: 11, fontWeight: 700, cursor: "pointer", fontFamily: mono }}
-                onClick={(e) => e.stopPropagation()}>BID NO →</button>
+              <div style={{ flex: 1, background: "transparent", color: C.no, border: `1px solid ${C.no}33`, borderRadius: 6, padding: "7px 0", fontSize: 11, fontWeight: 700, textAlign: "center", fontFamily: mono }}>BID NO →</div>
             )}
           </div>
         )}
