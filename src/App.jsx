@@ -116,7 +116,7 @@ export default function App() {
   );
 
   if (isResetFlow) return <ResetPassword />;
-  if (!session) return <AuthScreen />;
+  if (!session) return <AuthScreen tagline={window.location.pathname === "/kate" ? "BET ON KATE" : undefined} initialMode={window.location.pathname === "/kate" ? "signup" : "login"} />;
 
   if (!profile) return (
     <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: C.bg }}>

@@ -3,8 +3,8 @@ import { supabase } from "../lib/supabase.js";
 import { C, mono, inputStyle, labelStyle } from "../lib/constants.js";
 
 /* ─── AUTH SCREEN (login + signup) ───────────────────────────────── */
-export function AuthScreen() {
-  const [mode, setMode]         = useState("login"); // "login" | "signup" | "forgot"
+export function AuthScreen({ tagline, initialMode = "login" } = {}) {
+  const [mode, setMode]         = useState(initialMode); // "login" | "signup" | "forgot"
   const [name, setName]         = useState("");
   const [password, setPassword] = useState("");
   const [confirm, setConfirm]   = useState("");
@@ -49,7 +49,7 @@ export function AuthScreen() {
         <div style={{ textAlign: "center", marginBottom: 32 }}>
           <div style={{ fontSize: 48, marginBottom: 8 }}>☘️</div>
           <h1 style={{ fontSize: 26, fontWeight: 800, color: C.gold, margin: 0, fontFamily: mono, letterSpacing: -1 }}>WillDougIrish</h1>
-          <p style={{ color: C.muted, fontSize: 11, marginTop: 6, letterSpacing: 1 }}>PREDICTION MARKETS FOR SEATTLE DEGENS</p>
+          <p style={{ color: C.muted, fontSize: 11, marginTop: 6, letterSpacing: 1 }}>{tagline ?? "PREDICTION MARKETS FOR SEATTLE DEGENS"}</p>
         </div>
 
         {mode === "forgot" ? (
