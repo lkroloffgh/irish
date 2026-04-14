@@ -37,6 +37,12 @@ export default async function handler(req, res) {
   // Always exclude the triggering user + any explicitly excluded IDs
   const excludeIds = new Set([user.id, ...(payload.excludeUserIds || [])]);
 
+  // Exclude anyone the market is hidden from
+  if (payload.marketId) {
+    const { data: market } = await admin.from("markets").select("hidden_from").eq("id", payload.marketId).single();
+    (market?.hidden_from || []).forEach((uid) => excludeIds.add(uid));
+  }
+
   // userId → notification message (one per user, highest priority wins)
   const toSend = new Map();
 
