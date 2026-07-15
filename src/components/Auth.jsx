@@ -2,9 +2,11 @@ import { useState } from "react";
 import { supabase } from "../lib/supabase.js";
 import { C, mono, inputStyle, labelStyle } from "../lib/constants.js";
 
+const SIGNUPS_OPEN = false;
+
 /* ─── AUTH SCREEN (login + signup) ───────────────────────────────── */
 export function AuthScreen({ tagline, initialMode = "login" } = {}) {
-  const [mode, setMode]         = useState(initialMode); // "login" | "signup" | "forgot"
+  const [mode, setMode]         = useState(SIGNUPS_OPEN ? initialMode : "login"); // "login" | "signup" | "forgot"
   const [name, setName]         = useState("");
   const [password, setPassword] = useState("");
   const [confirm, setConfirm]   = useState("");
@@ -88,11 +90,13 @@ export function AuthScreen({ tagline, initialMode = "login" } = {}) {
               {loading ? "…" : mode === "login" ? "Enter ☘️" : "Create account"}
             </button>
 
-            <div style={{ display: "flex", justifyContent: "space-between" }}>
-              <button onClick={() => { setMode(mode === "login" ? "signup" : "login"); setMsg({ text: "", isErr: false }); setConfirm(""); }}
-                style={{ background: "transparent", border: "none", color: C.muted, fontSize: 12, cursor: "pointer", fontFamily: mono, padding: 0 }}>
-                {mode === "login" ? "Create account" : "Sign in instead"}
-              </button>
+            <div style={{ display: "flex", justifyContent: "flex-end" }}>
+              {SIGNUPS_OPEN && (
+                <button onClick={() => { setMode(mode === "login" ? "signup" : "login"); setMsg({ text: "", isErr: false }); setConfirm(""); }}
+                  style={{ background: "transparent", border: "none", color: C.muted, fontSize: 12, cursor: "pointer", fontFamily: mono, padding: 0 }}>
+                  {mode === "login" ? "Create account" : "Sign in instead"}
+                </button>
+              )}
               {mode === "login" && (
                 <button onClick={() => setMode("forgot")}
                   style={{ background: "transparent", border: "none", color: C.muted, fontSize: 12, cursor: "pointer", fontFamily: mono, padding: 0 }}>
