@@ -5,8 +5,9 @@ import { C, mono, inputStyle, labelStyle } from "../lib/constants.js";
 const SIGNUPS_OPEN = false;
 
 /* ─── AUTH SCREEN (login + signup) ───────────────────────────────── */
-export function AuthScreen({ tagline, initialMode = "login" } = {}) {
-  const [mode, setMode]         = useState(SIGNUPS_OPEN ? initialMode : "login"); // "login" | "signup" | "forgot"
+export function AuthScreen({ tagline, inviteCode, initialMode = "login" } = {}) {
+  const canSignUp   = SIGNUPS_OPEN || !!inviteCode;
+  const [mode, setMode]         = useState(canSignUp && initialMode === "signup" ? "signup" : (inviteCode ? "signup" : "login")); // "login" | "signup" | "forgot"
   const [name, setName]         = useState("");
   const [password, setPassword] = useState("");
   const [confirm, setConfirm]   = useState("");
@@ -29,10 +30,28 @@ export function AuthScreen({ tagline, initialMode = "login" } = {}) {
       if (error) setMsg({ text: "Wrong name or password.", isErr: true });
 
     } else if (mode === "signup") {
+      if (!canSignUp) {
+        setMsg({ text: "Signups are currently closed.", isErr: true });
+        setLoading(false);
+        return;
+      }
       if (password !== confirm) {
         setMsg({ text: "Passwords don't match.", isErr: true });
         setLoading(false);
         return;
+      }
+      if (inviteCode) {
+        const res = await fetch("/api/invite/use", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ code: inviteCode }),
+        });
+        if (!res.ok) {
+          const d = await res.json();
+          setMsg({ text: d.error || "Invite is invalid or expired.", isErr: true });
+          setLoading(false);
+          return;
+        }
       }
       const { error } = await supabase.auth.signUp({
         email, password,
@@ -91,7 +110,7 @@ export function AuthScreen({ tagline, initialMode = "login" } = {}) {
             </button>
 
             <div style={{ display: "flex", justifyContent: "flex-end" }}>
-              {SIGNUPS_OPEN && (
+              {canSignUp && (
                 <button onClick={() => { setMode(mode === "login" ? "signup" : "login"); setMsg({ text: "", isErr: false }); setConfirm(""); }}
                   style={{ background: "transparent", border: "none", color: C.muted, fontSize: 12, cursor: "pointer", fontFamily: mono, padding: 0 }}>
                   {mode === "login" ? "Create account" : "Sign in instead"}

@@ -116,7 +116,14 @@ export default function App() {
   );
 
   if (isResetFlow) return <ResetPassword />;
-  if (!session) return <AuthScreen tagline={window.location.pathname === "/kate" ? "BET ON KATE" : undefined} initialMode={window.location.pathname === "/kate" ? "signup" : "login"} />;
+  if (!session) {
+    const inviteCode = new URLSearchParams(window.location.search).get("invite");
+    const isKate     = window.location.pathname === "/kate";
+    return <AuthScreen
+      tagline={isKate ? "BET ON KATE" : undefined}
+      inviteCode={inviteCode}
+    />;
+  }
 
   if (!profile) return (
     <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: C.bg }}>

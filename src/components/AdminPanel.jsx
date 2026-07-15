@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { supabase, ADMIN_API } from "../lib/supabase.js";
-import { C, mono, inputStyle } from "../lib/constants.js";
+import { C, mono, inputStyle, labelStyle } from "../lib/constants.js";
 
 /* ─── ADMIN PANEL ─────────────────────────────────────────────────── */
 export function AdminPanel({ session }) {
@@ -14,6 +14,9 @@ export function AdminPanel({ session }) {
   const [adminMarkets, setAdminMarkets]   = useState([]);
   const [marketsLoading, setMarketsLoading] = useState(false);
   const [confirmDeleteMarket, setConfirmDeleteMarket] = useState(null);
+  const [invite, setInvite]               = useState(null); // { link, expires_at }
+  const [inviteLoading, setInviteLoading] = useState(false);
+  const [inviteCopied, setInviteCopied]   = useState(false);
 
   const getAuthHeader = async () => { const { data: { session: fresh } } = await supabase.auth.getSession(); return { Authorization: `Bearer ${fresh?.access_token}` }; };
 
@@ -115,8 +118,67 @@ export function AdminPanel({ session }) {
 
   const fmtDate = (d) => d ? new Date(d).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : "—";
 
+  const generateInvite = async () => {
+    setInviteLoading(true);
+    try {
+      const res  = await fetch(`${ADMIN_API}/admin/create-invite`, { method: "POST", headers: await getAuthHeader() });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+      setInvite(data);
+    } catch (e) {
+      setErr(e.message);
+    } finally {
+      setInviteLoading(false);
+    }
+  };
+
+  const copyInvite = () => {
+    const text = invite?.link;
+    if (!text) return;
+    if (navigator.clipboard && window.isSecureContext) {
+      navigator.clipboard.writeText(text);
+    } else {
+      const el = document.createElement("textarea");
+      el.value = text; el.style.position = "fixed"; el.style.opacity = "0";
+      document.body.appendChild(el); el.focus(); el.select();
+      document.execCommand("copy"); document.body.removeChild(el);
+    }
+    setInviteCopied(true);
+    setTimeout(() => setInviteCopied(false), 2000);
+  };
+
   return (
     <div style={{ padding: 16 }}>
+
+      {/* ── Invite section ── */}
+      <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 10, padding: "14px 16px", marginBottom: 20 }}>
+        <div style={{ fontSize: 11, fontWeight: 700, color: C.muted, letterSpacing: 1, textTransform: "uppercase", marginBottom: 12 }}>Invite to sign up</div>
+        {invite ? (
+          <>
+            <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 8 }}>
+              <input readOnly value={invite.link}
+                style={{ ...inputStyle, flex: 1, fontSize: 10, padding: "7px 10px", marginBottom: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", color: C.muted }} />
+              <button onClick={copyInvite}
+                style={{ background: inviteCopied ? C.yes : C.gold, color: "#000", border: "none", borderRadius: 6, padding: "7px 14px", fontWeight: 700, fontSize: 12, cursor: "pointer", fontFamily: mono, flexShrink: 0 }}>
+                {inviteCopied ? "Copied ✓" : "Copy"}
+              </button>
+            </div>
+            <div style={{ fontSize: 11, color: C.muted }}>
+              Expires {new Date(invite.expires_at).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })} · one-time use
+            </div>
+            <button onClick={() => { setInvite(null); }}
+              style={{ marginTop: 10, background: "transparent", border: "none", color: C.muted, fontSize: 11, cursor: "pointer", fontFamily: mono, padding: 0 }}>
+              Generate new link
+            </button>
+          </>
+        ) : (
+          <button onClick={generateInvite} disabled={inviteLoading}
+            style={{ background: C.gold, color: "#000", border: "none", borderRadius: 7, padding: "9px 18px", fontWeight: 800, fontSize: 12, cursor: inviteLoading ? "default" : "pointer", fontFamily: mono, opacity: inviteLoading ? 0.7 : 1 }}>
+            {inviteLoading ? "Generating…" : "Generate invite link"}
+          </button>
+        )}
+      </div>
+
       {/* Admin tabs */}
       <div style={{ display: "flex", gap: 8, marginBottom: 20 }}>
         {["users", "markets"].map((t) => (
